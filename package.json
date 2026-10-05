@@ -1,0 +1,36 @@
+{
+  "name": "dep-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Project Dependency Manager: a graph-based Gantt for project dependencies",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "start": "npm run build && tsx apps/server/src/main.ts",
+    "dev": "node scripts/dev.mjs",
+    "test": "node --import tsx --test \"packages/*/src/**/*.test.ts\" \"apps/*/src/**/*.test.ts\"",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:all": "npm run typecheck && npm test && npm run test:e2e"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.25.0",
+    "playwright": "1.56.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
