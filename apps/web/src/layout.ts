@@ -34,6 +34,8 @@ export interface Edge {
 
 export interface GanttLayout {
   origin: number;
+  /** Time covered, origin to end, in ms (independent of zoom). */
+  spanMs: number;
   width: number;
   height: number;
   bars: Bar[];
@@ -132,6 +134,7 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
 
   return {
     origin,
+    spanMs: end - origin,
     width: px(end - origin),
     height: bars.length * ROW_HEIGHT,
     bars,

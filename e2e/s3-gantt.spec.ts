@@ -31,14 +31,25 @@ test.describe("S3: graph-based Gantt", () => {
   test("edges run from each dependency's end to its dependent's start", async ({ page }) => {
     const edges = page.locator("[data-edge]");
     await expect(edges).toHaveCount(2);
-    const edge = await box(page.locator('[data-edge-dependency="Payments"][data-edge-dependent="Release"]'));
+    // The path's own start and end points, in page coordinates
+    const [start, end] = await page
+      .locator('[data-edge-dependency="Payments"][data-edge-dependent="Release"]')
+      .evaluate((el) => {
+        const path = el as SVGPathElement;
+        const m = path.getScreenCTM()!;
+        const at = (len: number) => {
+          const p = path.getPointAtLength(len);
+          return { x: p.x * m.a + m.e, y: p.y * m.d + m.f };
+        };
+        return [at(0), at(path.getTotalLength())];
+      });
     const payments = await barBox(page, "Payments");
     const release = await barBox(page, "Release");
     // Starts at the end of the dependency (from under it when the bars touch) and ends at the dependent's start
-    expect(edge.x).toBeGreaterThan(payments.x + payments.width - 12);
-    expect(edge.x).toBeLessThanOrEqual(payments.x + payments.width + 2);
-    // (the bounding box includes the arrowhead, whose tip overshoots by up to ~3px)
-    expect(Math.abs(edge.x + edge.width - release.x)).toBeLessThan(4);
+    expect(start.x).toBeGreaterThan(payments.x + payments.width - 12);
+    expect(start.x).toBeLessThanOrEqual(payments.x + payments.width + 1);
+    expect(Math.abs(end.x - release.x)).toBeLessThan(1);
+    expect(Math.abs(end.y - (release.y + release.height / 2))).toBeLessThan(1);
   });
 
   test("zoom in, zoom out and fit change the scale", async ({ page }) => {

@@ -1,5 +1,6 @@
-import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Project, Schedule } from "@dep-tracker/domain";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { criticalEdges, dependenciesOf, dependentsOf, parseDuration, type Project, type Schedule } from "@dep-tracker/domain";
+import { dashSeconds } from "./animation.ts";
 import { formatDateTime } from "./format.ts";
 import { BAR_HEIGHT, DAY_MS, fitPxPerDay, layoutGantt, ROW_HEIGHT, timeTicks, ZOOM_LEVELS } from "./layout.ts";
 
@@ -26,34 +27,66 @@ function nearestZoom(pxPerDay: number): ZoomName {
 export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: GanttProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [pxPerDay, setPxPerDay] = useState<number>(ZOOM_LEVELS[1].pxPerDay);
-  const [fitted, setFitted] = useState(false);
   const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay }), [project, schedule, pxPerDay]);
   const titleOf = useMemo(() => new Map(project.nodes.map((n) => [n.id, n.title])), [project.nodes]);
   const nodeOf = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
+  // Selection: dependencies upstream, dependents downstream, the rest dimmed (FR-14, FR-16).
+  const focus = useMemo(() => {
+    if (!selectedId || !nodeOf.has(selectedId)) return null;
+    return {
+      up: dependenciesOf(project, selectedId),
+      down: dependentsOf(project, selectedId),
+      critical: criticalEdges(project, schedule, selectedId),
+    };
+  }, [project, schedule, selectedId, nodeOf]);
+  const barHighlight = (id: string) =>
+    !focus ? undefined : id === selectedId ? "selected" : focus.up.has(id) ? "upstream" : focus.down.has(id) ? "downstream" : "dimmed";
+  const edgeHighlight = (dependencyId: string, dependentId: string) => {
+    if (!focus) return undefined;
+    if (focus.up.has(dependencyId) && (dependentId === selectedId || focus.up.has(dependentId))) return "upstream";
+    if (focus.down.has(dependentId) && (dependencyId === selectedId || focus.down.has(dependencyId))) return "downstream";
+    return "dimmed";
+  };
+  const dashDuration = (dependencyId: string) => {
+    try {
+      return `${dashSeconds(parseDuration(nodeOf.get(dependencyId)?.workTime ?? "")).toFixed(2)}s`;
+    } catch {
+      return "1s";
+    }
+  };
   const isCyclic = (id: string) => schedule.flags[id]?.includes("cyclic") ?? false;
   const stateOf = (id: string) =>
     isCyclic(id) ? "cyclic" : schedule.flags[id]?.includes("blockedByCycle") ? "blocked" : schedule.nodes[id] ? "ok" : "error";
   const xOf = useCallback((ms: number) => ((ms - layout.origin) / DAY_MS) * pxPerDay, [layout.origin, pxPerDay]);
 
-  const fit = useCallback(() => {
+  // "Fit" keeps the whole plan in view as nodes are added or the window changes, until you zoom by hand.
+  const [fitMode, setFitMode] = useState(true);
+  const [viewWidth, setViewWidth] = useState(0);
+  useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const span = (layout.width / pxPerDay) * DAY_MS;
-    setPxPerDay(Math.max(0.5, fitPxPerDay(span, Math.max(200, el.clientWidth - LABEL_SPACE - 8))));
-  }, [layout.width, pxPerDay]);
-
-  // Start fitted to the window.
+    setViewWidth(el.clientWidth);
+    const observer = new ResizeObserver(() => setViewWidth(el.clientWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   useLayoutEffect(() => {
-    if (!fitted && scroller.current) {
-      fit();
-      setFitted(true);
-    }
-  }, [fit, fitted]);
+    if (fitMode && viewWidth > 0) setPxPerDay(Math.max(0.5, fitPxPerDay(layout.spanMs, Math.max(200, viewWidth - LABEL_SPACE - 8))));
+  }, [fitMode, viewWidth, layout.spanMs]);
+  const fit = () => {
+    setFitMode(true);
+    const el = scroller.current;
+    if (el) setPxPerDay(Math.max(0.5, fitPxPerDay(layout.spanMs, Math.max(200, el.clientWidth - LABEL_SPACE - 8))));
+  };
+  const setZoom = (value: number | ((p: number) => number)) => {
+    setFitMode(false);
+    setPxPerDay(value);
+  };
 
   const zoomIndex = ZOOM_LEVELS.findIndex((z) => z.name === nearestZoom(pxPerDay));
   const zoomTo = (index: number) => {
     const level = ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, index))]!;
-    setPxPerDay(level.pxPerDay);
+    setZoom(level.pxPerDay);
   };
 
   const now = Date.now();
@@ -71,6 +104,7 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
+      setFitMode(false);
       setPxPerDay((p) => Math.min(4000, Math.max(0.5, p * (e.deltaY < 0 ? 1.2 : 1 / 1.2))));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -148,7 +182,7 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
         <select
           aria-label="Zoom level"
           value={nearestZoom(pxPerDay)}
-          onChange={(e) => setPxPerDay(ZOOM_LEVELS.find((z) => z.name === e.target.value)!.pxPerDay)}
+          onChange={(e) => setZoom(ZOOM_LEVELS.find((z) => z.name === e.target.value)!.pxPerDay)}
         >
           {ZOOM_LEVELS.map((z) => (
             <option key={z.name} value={z.name}>
@@ -159,7 +193,7 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
         <button className="ghost small" aria-label="Zoom in" onClick={() => zoomTo(zoomIndex - 1)} disabled={zoomIndex <= 0}>
           +
         </button>
-        <button className="ghost small" onClick={fit}>
+        <button className="ghost small" onClick={fit} aria-pressed={fitMode}>
           Fit
         </button>
         <button className="ghost small" onClick={scrollToToday} disabled={!showToday}>
@@ -190,22 +224,35 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
 
           <svg className="edges" width={width} height={layout.height} aria-hidden="true">
             <defs>
-              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
                 <path d="M0 0L10 5L0 10z" className="arrowhead" />
               </marker>
+              <marker id="arrow-up" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M0 0L10 5L0 10z" className="arrowhead up" />
+              </marker>
+              <marker id="arrow-down" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M0 0L10 5L0 10z" className="arrowhead down" />
+              </marker>
             </defs>
-            {layout.edges.map((e) => (
+            {layout.edges.map((e) => {
+              const highlight = edgeHighlight(e.dependencyId, e.dependentId);
+              const critical = focus ? focus.critical.has(`${e.dependencyId}>${e.dependentId}`) : undefined;
+              return (
               <path
                 data-cyclic={String(isCyclic(e.dependencyId) && isCyclic(e.dependentId))}
+                data-highlight={highlight}
+                data-critical={critical === undefined ? undefined : String(critical)}
+                style={highlight === "upstream" || highlight === "downstream" ? ({ "--dash-duration": dashDuration(e.dependencyId) } as CSSProperties) : undefined}
                 key={`${e.dependencyId}>${e.dependentId}`}
                 data-edge={`${e.dependencyId}>${e.dependentId}`}
                 data-edge-dependency={titleOf.get(e.dependencyId)}
                 data-edge-dependent={titleOf.get(e.dependentId)}
                 className={isCyclic(e.dependencyId) && isCyclic(e.dependentId) ? "edge cyclic" : "edge"}
                 d={roundedPath(e.points)}
-                markerEnd="url(#arrow)"
+                markerEnd={`url(#arrow${highlight === "upstream" ? "-up" : highlight === "downstream" ? "-down" : ""})`}
               />
-            ))}
+              );
+            })}
             {link && <line className="edge linking" x1={link.x0} y1={link.y0} x2={link.x1} y2={link.y1} />}
           </svg>
 
@@ -220,6 +267,7 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
                 data-node-id={b.id}
                 data-root={String(isRoot)}
                 data-selected={selectedId === b.id}
+                data-highlight={barHighlight(b.id)}
                 data-timed={b.timed}
                 data-state={stateOf(b.id)}
                 data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}

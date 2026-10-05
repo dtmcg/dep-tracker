@@ -14,6 +14,8 @@
   --warn: #8a5a00;
   --notice-bg: #eef3e6;
   --notice-ink: #3c5a14;
+  --upstream: #b85c00;
+  --downstream: #0b7f73;
   --radius: 10px;
   --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
@@ -36,6 +38,8 @@
     --warn: #f0c060;
     --notice-bg: #1f2a14;
     --notice-ink: #c5e09a;
+    --upstream: #f0a24a;
+    --downstream: #3fc7b5;
     color-scheme: dark;
   }
 }
@@ -229,3 +233,26 @@ button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--dan
 .bar-row[data-state="blocked"] .bar { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--danger) 60%, var(--line)); }
 .edge.cyclic { stroke: var(--danger); stroke-width: 2; opacity: 1; }
 .bar-badge { font-size: 11px; color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 999px; padding: 0 6px; }
+
+/* Selection and animation (S5) */
+.bar-row { transition: opacity 0.15s; }
+.bar-row[data-highlight="dimmed"] { opacity: 0.28; }
+.bar-row[data-highlight="upstream"] .bar { border: 2px solid var(--upstream); }
+.bar-row[data-highlight="downstream"] .bar { border: 2px solid var(--downstream); }
+.edge { transition: opacity 0.15s; }
+.edge[data-highlight="dimmed"] { opacity: 0.12; }
+.edge[data-highlight="upstream"], .edge[data-highlight="downstream"] {
+  opacity: 1; stroke-width: 1.8; stroke-dasharray: 6 5;
+  animation: dash-flow var(--dash-duration, 1s) linear infinite;
+}
+.edge[data-highlight="upstream"] { stroke: var(--upstream); }
+.edge[data-highlight="downstream"] { stroke: var(--downstream); }
+.edge[data-critical="true"] { stroke-width: 3.2; }
+.arrowhead.up { fill: var(--upstream); }
+.arrowhead.down { fill: var(--downstream); }
+/* Dashes move toward the end of the path: the dependent */
+@keyframes dash-flow { from { stroke-dashoffset: 22; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .edge, .bar-row { transition: none; }
+  .edge[data-highlight="upstream"], .edge[data-highlight="downstream"] { animation: none; }
+}

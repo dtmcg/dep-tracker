@@ -10,6 +10,14 @@ export function ProjectView({ session }: { session: Session }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = project.nodes.find((n) => n.id === selectedId) ?? null;
   useUndoShortcuts(session);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (e.key === "Escape" && !(target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) setSelectedId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <section aria-labelledby="project-name" className="project">
