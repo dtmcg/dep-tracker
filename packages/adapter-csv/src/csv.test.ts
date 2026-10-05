@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CsvSyntaxError, parseCsv, readRecords } from "./csv.ts";
+import { CsvSyntaxError, parseCsv, readRecords, stringifyCsv } from "./csv.ts";
 
 describe("parseCsv", () => {
   it("splits rows and fields", () => {
@@ -49,5 +49,20 @@ describe("readRecords", () => {
 
   it("names the file and column when a required column is missing", () => {
     assert.throws(() => readRecords("id\nn01\n", "nodes.csv", ["id", "title"]), /nodes\.csv.*"title"/);
+  });
+});
+
+describe("stringifyCsv", () => {
+  it("quotes only fields that need it and round-trips through parseCsv", () => {
+    const rows = [
+      ["id", "title", "description"],
+      ["n01", "Plain", 'Has, comma and "quotes"\nand a newline'],
+      ["n02", " padded ", ""],
+    ];
+    const text = stringifyCsv(rows);
+    assert.equal(text.split("\n")[0], "id,title,description");
+    assert.ok(text.includes('"Has, comma and ""quotes""'));
+    assert.ok(text.endsWith("\n"));
+    assert.deepEqual(parseCsv(text), rows);
   });
 });

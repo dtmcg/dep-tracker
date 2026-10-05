@@ -1,30 +1,66 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ApiError, openProject } from "./api.ts";
+import { ApiError, createApi } from "./api.ts";
 
-const json = (status: number, body: unknown) =>
-  (async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as typeof fetch;
+type Call = { url: string; init?: RequestInit };
 
-describe("openProject", () => {
-  it("posts the storage descriptor and returns the opened project", async () => {
-    let sent: { url: string; init?: RequestInit } | undefined;
-    const fetchFn = (async (url: string, init?: RequestInit) => {
-      sent = { url, init };
-      return new Response(JSON.stringify({ project: { name: "P" }, schedule: { nodes: {}, errors: {} }, version: "v1" }));
-    }) as typeof fetch;
+function recorder(status = 200, body: unknown = {}) {
+  const calls: Call[] = [];
+  const fetchFn = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify(body), { status });
+  }) as typeof fetch;
+  return { calls, fetchFn };
+}
 
-    const result = await openProject({ kind: "csv", path: "C:\\plans\\beta" }, fetchFn);
+const opened = { project: { id: "p1", name: "P" }, schedule: { nodes: {}, errors: {} }, version: "v1" };
 
-    assert.equal(sent?.url, "/api/projects/open");
-    assert.equal(sent?.init?.method, "POST");
-    assert.deepEqual(JSON.parse(String(sent?.init?.body)), { storage: { kind: "csv", path: "C:\\plans\\beta" } });
+describe("api client", () => {
+  it("sends the per-launch token on every call", async () => {
+    const { calls, fetchFn } = recorder(200, opened);
+    await createApi("tok", fetchFn).openProject({ kind: "csv", path: "C:\\plans\\beta" });
+    assert.equal(new Headers(calls[0]?.init?.headers).get("x-dep-tracker-token"), "tok");
+  });
+
+  it("opens a project by posting its storage descriptor", async () => {
+    const { calls, fetchFn } = recorder(200, opened);
+    const result = await createApi("tok", fetchFn).openProject({ kind: "csv", path: "C:\\plans\\beta" });
+    assert.equal(calls[0]?.url, "/api/projects/open");
+    assert.equal(calls[0]?.init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), { storage: { kind: "csv", path: "C:\\plans\\beta" } });
     assert.equal(result.project.name, "P");
   });
 
-  it("throws the server's error message", async () => {
+  it("creates a project", async () => {
+    const { calls, fetchFn } = recorder(201, opened);
+    await createApi("tok", fetchFn).createProject({
+      storage: { kind: "csv", path: "x" },
+      name: "Launch",
+      start: "2026-11-02T09:00:00.000Z",
+      root: { title: "Done", workTime: "1d" },
+    });
+    assert.equal(calls[0]?.url, "/api/projects");
+    assert.equal(JSON.parse(String(calls[0]?.init?.body)).root.title, "Done");
+  });
+
+  it("sends commands with the expected version", async () => {
+    const { calls, fetchFn } = recorder(200, opened);
+    await createApi("tok", fetchFn).sendCommands("p 1", "v1", [{ type: "addEdge", dependentId: "a", dependencyId: "b" }]);
+    assert.equal(calls[0]?.url, "/api/projects/p%201/commands");
+    assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)).expectedVersion, "v1");
+  });
+
+  it("reads the current version", async () => {
+    const { calls, fetchFn } = recorder(200, { version: "v9" });
+    assert.equal(await createApi("tok", fetchFn).version("p1"), "v9");
+    assert.equal(calls[0]?.url, "/api/projects/p1/version");
+  });
+
+  it("throws the server's error message and status", async () => {
+    const { fetchFn } = recorder(409, { error: "changed on disk" });
     await assert.rejects(
-      openProject({ kind: "csv", path: "x" }, json(422, { error: "No project.csv found in x" })),
-      (e: unknown) => e instanceof ApiError && e.message === "No project.csv found in x" && e.status === 422,
+      createApi("tok", fetchFn).sendCommands("p1", "v1", []),
+      (e: unknown) => e instanceof ApiError && e.message === "changed on disk" && e.status === 409,
     );
   });
 
@@ -32,6 +68,6 @@ describe("openProject", () => {
     const down = (async () => {
       throw new TypeError("fetch failed");
     }) as typeof fetch;
-    await assert.rejects(openProject({ kind: "csv", path: "x" }, down), /server/i);
+    await assert.rejects(createApi("tok", down).openProject({ kind: "csv", path: "x" }), /server/i);
   });
 });

@@ -9,8 +9,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | Slice | Outcome | State |
 | --- | --- | --- |
 | S0 Walking skeleton | Open a CSV project and see its root node with its completion time | Done |
-| S1 Add a dependency | Add a dependency node; dates update and persist to CSV | Next |
-| S2–S11 | See the PRD's delivery plan | Planned |
+| S1 Add a dependency | Create a project, add dependency nodes; dates update and persist to CSV | Done |
+| S2 Full scheduling and details | Not-before dates, dependency time, expandable editable node details | Next |
+| S3–S11 | See the PRD's delivery plan | Planned |
 
 ## Getting started
 
@@ -38,6 +39,7 @@ Open http://127.0.0.1:4317, paste the full path of a project folder (try `fixtur
 ```
 packages/domain        Model, duration parsing, scheduling engine (shared by server and web)
 packages/adapter-csv   CSV storage adapter
+packages/storage-conformance  Shared test suite every storage adapter must pass
 apps/server            Local API server (node:http), also serves the built web app
 apps/web               React UI, bundled with esbuild
 e2e                    Playwright acceptance tests, one file per slice
@@ -69,8 +71,6 @@ The PRD recommends Vitest, Vite and Fastify. S0 uses Node's built-in test runner
 4. `npm run test:all` must be green before merging. Never weaken or delete a test to get there.
 5. Scheduling logic lives only in `packages/domain`.
 
-## Known gaps carried to later slices
+## Security
 
-- Per-launch API token (NFR-5) is not enforced yet; the server binds to 127.0.0.1 only.
-- Dependency time, not-before dates and cycles are not scheduled yet (S1, S2, S4).
-- CSV writing, the shared adapter conformance suite and external-change detection arrive with S1.
+The server binds to 127.0.0.1 only and generates a per-launch token, which it writes into the page it serves; every API call must carry it (NFR-5).

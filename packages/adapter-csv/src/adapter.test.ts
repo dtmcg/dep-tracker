@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -90,5 +90,31 @@ describe("csvAdapter.load", () => {
     const dir = await copyOfSample();
     await writeFile(path.join(dir, "nodes.csv"), "id,title,work_time\nn01,A,1d\nn01,B,1d\n");
     await assert.rejects(csvAdapter.load({ kind: "csv", path: dir }), /nodes\.csv line 3.*"n01"/);
+  });
+});
+
+describe("csvAdapter.save", () => {
+  it("keeps columns it does not own, matched to their node by id", async () => {
+    const dir = await copyOfSample();
+    await writeFile(
+      path.join(dir, "nodes.csv"),
+      "id,title,work_time,owner,not_before,labels,description,links\n" + "n01,Public beta live,2d,Aoife,,,,\n",
+    );
+    const { project, version } = await csvAdapter.load({ kind: "csv", path: dir });
+    const renamed = { ...project, nodes: project.nodes.map((n) => ({ ...n, title: "Beta live" })) };
+    await csvAdapter.save({ kind: "csv", path: dir }, renamed, version);
+    const text = await readFile(path.join(dir, "nodes.csv"), "utf8");
+    assert.match(text.split("\n")[0] ?? "", /owner/);
+    assert.match(text, /n01,Beta live,2d,.*Aoife/);
+  });
+
+  it("keeps the previous files as .bak and leaves no temporary files behind", async () => {
+    const dir = await copyOfSample();
+    const before = await readFile(path.join(dir, "nodes.csv"), "utf8");
+    const { project, version } = await csvAdapter.load({ kind: "csv", path: dir });
+    await csvAdapter.save({ kind: "csv", path: dir }, { ...project, name: "Renamed" }, version);
+    assert.equal(await readFile(path.join(dir, "nodes.csv.bak"), "utf8"), before);
+    const files = await readdir(dir);
+    assert.deepEqual(files.filter((f) => f.includes(".tmp")), []);
   });
 });

@@ -43,4 +43,50 @@ describe("schedule", () => {
     assert.equal(result.nodes.n01, undefined);
     assert.match(result.errors.n01 ?? "", /"soon"/);
   });
+
+  it("starts a dependent when its latest dependency completes", () => {
+    const p = project({
+      nodes: [
+        { id: "n01", title: "Root", workTime: "2d", labels: [], description: "", links: [] },
+        { id: "n02", title: "A", workTime: "3d", labels: [], description: "", links: [] },
+        { id: "n03", title: "B", workTime: "1d", labels: [], description: "", links: [] },
+      ],
+      edges: [
+        { dependentId: "n01", dependencyId: "n02" },
+        { dependentId: "n01", dependencyId: "n03" },
+      ],
+    });
+    const result = schedule(p);
+    assert.deepEqual(result.nodes.n02, { start: "2026-11-02T09:00:00.000Z", completion: "2026-11-05T09:00:00.000Z" });
+    assert.deepEqual(result.nodes.n01, { start: "2026-11-05T09:00:00.000Z", completion: "2026-11-07T09:00:00.000Z" });
+  });
+
+  it("chains through several levels regardless of node order", () => {
+    const nodes = [
+      { id: "n03", title: "C", workTime: "1d", labels: [], description: "", links: [] },
+      { id: "n01", title: "Root", workTime: "1d", labels: [], description: "", links: [] },
+      { id: "n02", title: "B", workTime: "1d", labels: [], description: "", links: [] },
+    ];
+    const edges = [
+      { dependentId: "n01", dependencyId: "n02" },
+      { dependentId: "n02", dependencyId: "n03" },
+    ];
+    const forward = schedule(project({ nodes, edges }));
+    const reversed = schedule(project({ nodes: [...nodes].reverse(), edges: [...edges].reverse() }));
+    assert.equal(forward.nodes.n01?.completion, "2026-11-05T09:00:00.000Z");
+    assert.deepEqual(forward, reversed);
+  });
+
+  it("leaves dependents of an untimeable node untimed and explains why", () => {
+    const p = project({
+      nodes: [
+        { id: "n01", title: "Root", workTime: "1d", labels: [], description: "", links: [] },
+        { id: "n02", title: "Bad", workTime: "soon", labels: [], description: "", links: [] },
+      ],
+      edges: [{ dependentId: "n01", dependencyId: "n02" }],
+    });
+    const result = schedule(p);
+    assert.equal(result.nodes.n01, undefined);
+    assert.match(result.errors.n01 ?? "", /Bad/);
+  });
 });

@@ -114,3 +114,18 @@ export function readRecords(
   });
   return { records };
 }
+
+function quote(field: string): string {
+  return /[",\r\n]/.test(field) || field !== field.trim() ? `"${field.replace(/"/g, '""')}"` : field;
+}
+
+/** Write rows as CSV with LF line endings, quoting only where needed. */
+export function stringifyCsv(rows: string[][]): string {
+  return rows.map((row) => row.map(quote).join(",")).join("\n") + "\n";
+}
+
+/** Read a CSV's header row as written, plus every row's fields. */
+export function readTable(text: string): { header: string[]; rows: CsvRow[] } {
+  const [header, ...rows] = parseRows(text);
+  return { header: header?.fields ?? [], rows };
+}

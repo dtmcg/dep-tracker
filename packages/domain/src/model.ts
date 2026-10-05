@@ -37,12 +37,32 @@ export interface LoadedProject {
 }
 
 /**
- * Every store implements this. Slice S0 needs `load`; create, save and watch
- * arrive with the slices that use them, together with the conformance suite.
+ * Every store implements this and passes the shared conformance suite in
+ * @dep-tracker/storage-conformance.
  */
 export interface StorageAdapter<D extends StorageDescriptor = StorageDescriptor> {
   readonly kind: D["kind"];
+  /** Write a new project; rejects with ProjectExistsError if one is already there. */
+  create(descriptor: D, project: Project): Promise<string>;
   load(descriptor: D): Promise<LoadedProject>;
+  /** Replace the stored project; rejects with VersionConflictError if it changed since `expectedVersion`. */
+  save(descriptor: D, project: Project, expectedVersion: string): Promise<string>;
+  /** Cheap check of the current version, used to detect edits made outside the app. */
+  version(descriptor: D): Promise<string>;
+}
+
+export class VersionConflictError extends Error {
+  constructor(message = "The project changed on disk since it was loaded. Reload it and try again.") {
+    super(message);
+    this.name = "VersionConflictError";
+  }
+}
+
+export class ProjectExistsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProjectExistsError";
+  }
 }
 
 export interface NodeTimes {
