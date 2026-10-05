@@ -1,0 +1,8 @@
+{
+  "name": "@dep-tracker/sheet-layout",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Project / Tasks / Labels sheet layout shared by the Excel and Google Sheets adapters",
+  "exports": { ".": "./src/index.ts" }
+}

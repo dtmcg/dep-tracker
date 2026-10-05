@@ -81,3 +81,15 @@ test("S1: edits made to the CSV files outside the app are picked up (FR-26)", as
   await expect(page.getByRole("article", { name: "Public beta open" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("note")).toContainText("changed on disk");
 });
+
+test("S1: an outside edit that makes the project unreadable is reported, not ignored", async ({ page }) => {
+  const folder = path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-e2e-")), "plan");
+  await cp(path.resolve(here, "../fixtures/sample-project"), folder, { recursive: true });
+  await page.goto("/");
+  await page.getByLabel("Project folder").fill(folder);
+  await page.getByRole("button", { name: "Open" }).click();
+  await expect(page.getByRole("article", { name: "Public beta live" })).toBeVisible();
+
+  await writeFile(path.join(folder, "project.csv"), "id,name,start,root_id\np01,Mobile relaunch,2026-11-02T09:00:00Z,nope\n");
+  await expect(page.getByRole("alert")).toContainText('root_id "nope"', { timeout: 10_000 });
+});

@@ -37,7 +37,7 @@ export function ProjectView({ session }: { session: Session }) {
           <span className="meta">
             {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDateTime(project.start)} ·{" "}
             <span className="mono" title={snapshot.storage.path}>
-              {{ csv: "CSV", excel: "Excel", obsidian: "Obsidian" }[snapshot.storage.kind]}: {snapshot.storage.path}
+              {{ csv: "CSV", excel: "Excel", obsidian: "Obsidian", gsheets: "Google Sheet" }[snapshot.storage.kind]}: {snapshot.storage.path}
             </span>
           </span>
         </div>

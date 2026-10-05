@@ -113,3 +113,22 @@ describe("excelAdapter: errors name the sheet and row", () => {
     await assert.rejects(excelAdapter.load({ kind: "excel", path: path.join(here, "nope.xlsx") }), /No workbook/);
   });
 });
+
+describe("excelAdapter: a task renamed in the spreadsheet app", () => {
+  it("keeps the dependencies that still name it by its old title", async () => {
+    const file = await copyOf(handEdited);
+    await excelAdapter.load({ kind: "excel", path: file });
+    const { writeWorkbook } = await import("@dep-tracker/xlsx");
+    const { writeFile } = await import("node:fs/promises");
+    const wb = readWorkbook(await readFile(file));
+    const tasks = wb.sheets.find((s) => s.name === "Tasks")!;
+    const row = tasks.rows.findIndex((r) => r[1] === "Build");
+    tasks.rows[row]![1] = "Build v2"; // renamed; "Launch" still depends on "Build"
+    // Keep date cells formatted as dates, as a spreadsheet app would
+    const rows = tasks.rows.map((r) => (r ?? []).map((v) => (v instanceof Date ? { value: v, style: "date" as const } : v)));
+    await writeFile(file, writeWorkbook([{ name: "Tasks", rows }], await readFile(file)));
+    const { project } = await excelAdapter.load({ kind: "excel", path: file });
+    const id = (t: string) => project.nodes.find((n) => n.title === t)!.id;
+    assert.ok(project.edges.some((e) => e.dependentId === id("Launch") && e.dependencyId === id("Build v2")));
+  });
+});

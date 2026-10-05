@@ -83,4 +83,14 @@ describe("api client", () => {
     await createApi("tok", fetchFn).exportProject("p1", { kind: "csv", path: "out" });
     assert.equal(calls[0]?.url, "/api/projects/p1/export");
   });
+
+  it("checks and starts Google sign-in", async () => {
+    const { calls, fetchFn } = recorder(200, { url: "https://accounts.example/auth" });
+    const api = createApi("tok", fetchFn);
+    assert.equal(await api.googleStart(), "https://accounts.example/auth");
+    assert.equal(calls[0]?.url, "/api/auth/google/start");
+    assert.equal(calls[0]?.init?.method, "POST");
+    await api.googleStatus();
+    assert.equal(calls[1]?.url, "/api/auth/google/status");
+  });
 });

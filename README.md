@@ -17,8 +17,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S6 Labels | Labels with autocomplete, a label key with counts, saved colours (presets or picker), toggled highlighting | Done |
 | S7 Excel adapter | Open, create and edit .xlsx workbooks; import between stores; export to CSV | Done |
 | S8 Obsidian adapter | One note per task in a vault folder, wikilink dependencies, tags for labels | Done |
-| S9 Google Sheets adapter | Sign in, open and edit a Google Sheet | Next |
-| S10–S11 | See the PRD's delivery plan | Planned |
+| S9 Google Sheets adapter | Sign in with Google, then create in, open and edit Google Sheets; outside edits picked up within seconds | Done |
+| S10 Cross-project references | Reference another project's root | Next |
+| S11 UI styles | Four switchable styles | Planned |
 
 ## Getting started
 
@@ -49,6 +50,8 @@ packages/adapter-csv   CSV storage adapter
 packages/adapter-excel Excel (.xlsx) storage adapter
 packages/xlsx          Minimal dependency-free .xlsx reader/writer (zip + SpreadsheetML)
 packages/adapter-obsidian  Obsidian vault folder adapter (notes with frontmatter)
+packages/adapter-gsheets   Google Sheets adapter, Google sign-in, and a stand-in Google service for tests
+packages/sheet-layout      The Project / Tasks / Labels layout shared by Excel and Google Sheets
 packages/storage-conformance  Shared test suite every storage adapter must pass
 apps/server            Local API server (node:http), also serves the built web app
 apps/web               React UI, bundled with esbuild
@@ -105,6 +108,33 @@ The note body is the task's description.
 - A note you create by hand becomes a task when it has a `work_time`; it gets an `id` on the next save. Notes without `id` or `work_time` are left alone.
 - When the app saves, it keeps note bodies and frontmatter keys it doesn't own. A task deleted in the app moves to the folder's `.trash`, and the previous text of every changed note is kept in `.dep-tracker-backup`. Both are hidden from Obsidian.
 - Times are stored to the minute in local time, which is the format Obsidian's date-time properties use. The PRD suggested naming the root note after the project. I gave the project its own note instead, because the success criteria task already has its own title.
+
+## Google Sheets
+
+Projects in Google Sheets use the same Project / Tasks / Labels layout as Excel. To create one, make a blank sheet (sheets.new) and paste its link into New project. To open a project sheet, paste its link into Open.
+
+### One-time setup
+
+Google needs your own OAuth client:
+
+1. In Google Cloud console, create a project and enable the **Google Sheets API**.
+2. Under **OAuth consent screen**, set up an External app in Testing mode and add your Google account as a test user.
+3. Under **Credentials**, create an **OAuth client ID** of type **Desktop app**.
+4. Start dep-tracker with its ID and secret:
+
+   ```powershell
+   $env:GOOGLE_CLIENT_ID = "…apps.googleusercontent.com"
+   $env:GOOGLE_CLIENT_SECRET = "…"
+   npm start
+   ```
+
+5. On the start screen, choose **Google Sheet**, then **Connect Google account**.
+
+Sign-in uses OAuth for installed apps with a loopback redirect (back to 127.0.0.1) and PKCE. Only the refresh token is kept, in `~/.dep-tracker/google-token.json`, readable by your user only. The PRD asks for the OS keychain; that needs a native module, so it's a follow-up. Set `DEP_TRACKER_CONFIG_DIR` to keep the token somewhere else.
+
+Values are written exactly as typed, so a title like `=1+1` stays text. Dates are stored in the spreadsheet's own time zone. If you rename a task in the sheet, its links stay intact, because the app remembers titles from its last read and the next save updates Depends on.
+
+The tests run against a stand-in for Google's sign-in and Sheets endpoints (`packages/adapter-gsheets/src/fake-google.ts`), not the real service.
 
 ## Stack choices
 

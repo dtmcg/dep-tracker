@@ -122,13 +122,22 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
     let stopped = false;
     const check = async () => {
       if (stopped || pending.current > 0) return;
+      let version: string;
       try {
-        const version = await api.version(confirmed.current.project.id);
-        if (!stopped && pending.current === 0 && version !== confirmed.current.version) {
-          await reload("The project changed on disk and has been reloaded.");
-        }
+        version = await api.version(confirmed.current.project.id);
       } catch {
-        // Transient: the next poll will try again.
+        return; // Transient: the next poll will try again.
+      }
+      if (stopped || pending.current > 0 || version === confirmed.current.version) return;
+      try {
+        await reload("The project changed on disk and has been reloaded.");
+        setSaveState((s) => (s.kind === "error" ? { kind: "saved" } : s));
+      } catch (error) {
+        // Say so rather than silently showing stale data (FR-26).
+        setSaveState({
+          kind: "error",
+          message: `The project changed on disk but can't be read: ${(error as Error).message}. Fix it there; this view shows the last version that could be read.`,
+        });
       }
     };
     const timer = setInterval(check, POLL_MS);

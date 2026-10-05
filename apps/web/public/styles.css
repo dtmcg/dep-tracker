@@ -298,3 +298,5 @@ button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--dan
 input.mono { font-size: 13px; }
 .export-form { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); }
 .start .field select { width: 100%; }
+.google-status { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
+.google-status.connected { color: var(--notice-ink); font-weight: 600; }

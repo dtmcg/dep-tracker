@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { csvAdapter } from "@dep-tracker/adapter-csv";
 import { excelAdapter } from "@dep-tracker/adapter-excel";
+import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTokenStore } from "@dep-tracker/adapter-gsheets";
 import { obsidianAdapter } from "@dep-tracker/adapter-obsidian";
 import { createApp } from "./app.ts";
 
@@ -12,8 +14,22 @@ const port = Number(process.env.PORT ?? 4317);
 const host = "127.0.0.1";
 const token = randomBytes(24).toString("hex");
 
+// Google Sheets: your own OAuth client ("Desktop app") from Google Cloud; see the README.
+const configDir = process.env.DEP_TRACKER_CONFIG_DIR ?? path.join(homedir(), ".dep-tracker");
+const google = createGoogleAuth({
+  clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  accountsUrl: process.env.DEP_TRACKER_GOOGLE_ACCOUNTS_URL,
+  oauthUrl: process.env.DEP_TRACKER_GOOGLE_OAUTH_URL,
+  store: fileTokenStore(path.join(configDir, "google-token.json")),
+});
+const gsheets = createGoogleSheetsAdapter(
+  createSheetsClient({ baseUrl: process.env.DEP_TRACKER_GOOGLE_SHEETS_URL, accessToken: () => google.accessToken() }),
+);
+
 const server = createApp({
-  adapters: { csv: csvAdapter, excel: excelAdapter, obsidian: obsidianAdapter },
+  adapters: { csv: csvAdapter, excel: excelAdapter, obsidian: obsidianAdapter, gsheets },
+  google,
   staticDir: path.resolve(here, "../../web/dist"),
   token,
 });

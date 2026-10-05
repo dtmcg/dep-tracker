@@ -53,6 +53,8 @@ export function createApi(token: string, fetchFn: typeof fetch = (...args) => fe
     version: async (id: string) => (await request<{ version: string }>(`${projectUrl(id)}/version`)).version,
     importProject: (source: StorageDescriptor, target: StorageDescriptor) =>
       post<OpenedProject>("/api/projects/import", { source, target }),
+    googleStatus: () => request<{ configured: boolean; connected: boolean }>("/api/auth/google/status"),
+    googleStart: async () => (await post<{ url: string }>("/api/auth/google/start", {})).url,
     exportProject: (id: string, storage: StorageDescriptor) =>
       post<{ storage: StorageDescriptor; version: string }>(`${projectUrl(id)}/export`, { storage }),
   };

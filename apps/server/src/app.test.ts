@@ -7,6 +7,8 @@ import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { csvAdapter } from "@dep-tracker/adapter-csv";
 import { excelAdapter } from "@dep-tracker/adapter-excel";
+import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTokenStore } from "@dep-tracker/adapter-gsheets";
+import { type FakeGoogle, startFakeGoogle } from "@dep-tracker/adapter-gsheets/fake";
 import { createApp } from "./app.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -16,18 +18,31 @@ const TOKEN = "test-token";
 let base = "";
 let close: () => Promise<void>;
 let staticDir = "";
+let fake: FakeGoogle;
 
 before(async () => {
+  fake = await startFakeGoogle({ clientId: "cid", clientSecret: "secret" });
+  const google = createGoogleAuth({
+    clientId: "cid",
+    clientSecret: "secret",
+    accountsUrl: fake.url,
+    oauthUrl: fake.url,
+    store: fileTokenStore(path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-cfg-")), "google.json")),
+  });
+  const gsheets = createGoogleSheetsAdapter(createSheetsClient({ baseUrl: fake.url, accessToken: () => google.accessToken() }));
   staticDir = await mkdtemp(path.join(tmpdir(), "dep-tracker-web-"));
   await writeFile(path.join(staticDir, "index.html"), "<!doctype html><head><title>dep-tracker</title></head><body></body>");
   await writeFile(path.join(staticDir, "app.js"), "console.log('hi')");
-  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter }, staticDir, token: TOKEN });
+  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter, gsheets }, staticDir, token: TOKEN, google });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => new Promise((resolve) => server.close(() => resolve()));
 });
 
-after(() => close());
+after(async () => {
+  await close();
+  await fake.close();
+});
 
 const headers = { "content-type": "application/json", "x-dep-tracker-token": TOKEN };
 const post = (url: string, body: unknown) => fetch(base + url, { method: "POST", headers, body: JSON.stringify(body) });
@@ -219,6 +234,38 @@ describe("POST /api/projects/:id/export (FR-27)", () => {
     const res = await post(`/api/projects/${opened.project.id}/export`, { storage: { kind: "csv", path: folder } });
     assert.equal(res.status, 201);
     assert.match(await readFile(path.join(folder, "nodes.csv"), "utf8"), /Done,1d/);
+  });
+});
+
+describe("Google sign-in and Sheets (S9)", () => {
+  it("signs in through the loopback redirect, then opens a Google Sheet", async () => {
+    assert.deepEqual(await (await get("/api/auth/google/status")).json(), { configured: true, connected: false });
+    const { url } = await (await post("/api/auth/google/start", {})).json();
+    const consent = await fetch(url, { redirect: "manual" });
+    const callback = new URL(consent.headers.get("location")!);
+    assert.equal(callback.pathname, "/api/auth/google/callback");
+    assert.equal(callback.host, new URL(base).host);
+    // The browser lands on our callback without the API token; the state protects it.
+    const page = await fetch(callback);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /Signed in to Google/);
+    assert.deepEqual(await (await get("/api/auth/google/status")).json(), { configured: true, connected: true });
+
+    const id = fake.createSpreadsheet("Plan");
+    const created = await post("/api/projects", {
+      storage: { kind: "gsheets", path: `https://docs.google.com/spreadsheets/d/${id}/edit` },
+      name: "Sheet plan",
+      start: "2026-11-02T09:00:00.000Z",
+      root: { title: "Done", workTime: "1d" },
+    });
+    assert.equal(created.status, 201);
+    assert.ok(fake.spreadsheet(id)!.sheets.some((s) => s.title === "Tasks"));
+  });
+
+  it("refuses a callback with a state it never issued", async () => {
+    const res = await fetch(`${base}/api/auth/google/callback?code=x&state=forged`);
+    assert.equal(res.status, 400);
+    assert.match(await res.text(), /state/i);
   });
 });
 

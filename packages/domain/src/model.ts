@@ -33,7 +33,8 @@ export interface Project {
 export type StorageDescriptor =
   | { kind: "csv"; path: string }
   | { kind: "excel"; path: string }
-  | { kind: "obsidian"; path: string };
+  | { kind: "obsidian"; path: string }
+  | { kind: "gsheets"; path: string };
 
 export interface LoadedProject {
   project: Project;

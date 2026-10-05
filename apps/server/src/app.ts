@@ -15,6 +15,14 @@ import {
   VersionConflictError,
 } from "@dep-tracker/domain";
 
+/** Google sign-in, as provided by @dep-tracker/adapter-gsheets. */
+export interface GoogleSignIn {
+  status(): Promise<{ configured: boolean; connected: boolean }>;
+  start(redirectUri: string): { url: string; state: string };
+  finish(params: URLSearchParams): Promise<void>;
+  signOut(): Promise<void>;
+}
+
 export interface AppOptions {
   /** Storage adapters by kind. */
   adapters: Partial<Record<StorageDescriptor["kind"], StorageAdapter>>;
@@ -22,6 +30,8 @@ export interface AppOptions {
   staticDir?: string;
   /** Per-launch secret every API call must carry (NFR-5). */
   token: string;
+  /** Google sign-in for Sheets (S9). */
+  google?: GoogleSignIn;
 }
 
 export const TOKEN_HEADER = "x-dep-tracker-token";
@@ -106,7 +116,27 @@ export function createApp(options: AppOptions): Server {
   async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
     const route = `${req.method} ${url.pathname}`;
     if (route === "GET /api/health") return sendJson(res, 200, { ok: true });
+    // Google redirects the browser here; it can't carry our token, so the one-time OAuth state guards it.
+    if (route === "GET /api/auth/google/callback") return googleCallback(res, url);
     if (req.headers[TOKEN_HEADER] !== options.token) throw new HttpError(401, "Missing or wrong API token");
+
+    if (route === "GET /api/auth/google/status") {
+      return sendJson(res, 200, options.google ? await options.google.status() : { configured: false, connected: false });
+    }
+    if (route === "POST /api/auth/google/start") {
+      if (!options.google) throw new HttpError(422, "Google Sheets is not available");
+      const host = req.headers.host ?? "";
+      if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)) throw new HttpError(400, "Sign in from the app on this computer");
+      try {
+        return sendJson(res, 200, { url: options.google.start(`http://${host}/api/auth/google/callback`).url });
+      } catch (error) {
+        throw toHttp(error);
+      }
+    }
+    if (route === "POST /api/auth/google/sign-out") {
+      await options.google?.signOut();
+      return sendJson(res, 200, { ok: true });
+    }
 
     if (route === "POST /api/projects/open") {
       const descriptor = parseDescriptor((await readJson(req)).storage);
@@ -191,6 +221,24 @@ export function createApp(options: AppOptions): Server {
     }
 
     throw new HttpError(404, `No route for ${route}`);
+  }
+
+  async function googleCallback(res: ServerResponse, url: URL): Promise<void> {
+    const page = (status: number, title: string, message: string) => {
+      res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      res.end(
+        `<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><body style="font:16px system-ui;padding:40px;max-width:560px">` +
+          `<h1 style="font-size:22px">${esc(title)}</h1><p>${esc(message)}</p>${status === 200 ? "<script>setTimeout(() => window.close(), 800)</script>" : ""}</body>`,
+      );
+    };
+    if (!options.google) return page(404, "Not available", "Google Sheets is not set up in this app.");
+    try {
+      await options.google.finish(url.searchParams);
+      page(200, "Signed in to Google", "You can close this tab and go back to dep-tracker.");
+    } catch (error) {
+      page(400, "Google sign-in failed", (error as Error).message);
+    }
   }
 
   async function serveStatic(res: ServerResponse, url: URL, staticDir: string): Promise<void> {

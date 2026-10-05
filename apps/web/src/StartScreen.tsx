@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { StorageDescriptor } from "@dep-tracker/domain";
 import type { Api, OpenedProject } from "./api.ts";
 
@@ -27,6 +27,13 @@ export const STORES: { kind: Kind; name: string; location: string; hint: string;
     location: "Vault folder",
     hint: "A folder inside your vault holding one note per task and a \"(project)\" note.",
     placeholder: "C:\\Users\\you\\Vault\\Projects\\my-plan",
+  },
+  {
+    kind: "gsheets",
+    name: "Google Sheet",
+    location: "Spreadsheet link",
+    hint: "Paste the sheet's link. For a new project, start from a blank sheet (sheets.new).",
+    placeholder: "https://docs.google.com/spreadsheets/d/…",
   },
 ];
 const storeOf = (kind: Kind) => STORES.find((s) => s.kind === kind)!;
@@ -72,9 +79,9 @@ export function StartScreen({ api, onOpened }: { api: Api; onOpened: (project: O
       </div>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="panel">
-        {tab === "open" && <OpenForm busy={busy} onSubmit={(storage) => run(() => api.openProject(storage))} />}
-        {tab === "new" && <NewForm busy={busy} onSubmit={(input) => run(() => api.createProject(input))} />}
-        {tab === "import" && <ImportForm busy={busy} onSubmit={(source, target) => run(() => api.importProject(source, target))} />}
+        {tab === "open" && <OpenForm api={api} busy={busy} onSubmit={(storage) => run(() => api.openProject(storage))} />}
+        {tab === "new" && <NewForm api={api} busy={busy} onSubmit={(input) => run(() => api.createProject(input))} />}
+        {tab === "import" && <ImportForm api={api} busy={busy} onSubmit={(source, target) => run(() => api.importProject(source, target))} />}
       </div>
 
       {error && (
@@ -101,7 +108,65 @@ function StoreSelect({ id, label, value, onChange }: { id: string; label: string
   );
 }
 
-function OpenForm({ busy, onSubmit }: { busy: boolean; onSubmit: (storage: StorageDescriptor) => void }) {
+/** Google sign-in status, and the button that starts it (S9). */
+function GoogleConnect({ api }: { api: Api }) {
+  const [status, setStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stopped = false;
+    const check = () =>
+      api
+        .googleStatus()
+        .then((s) => !stopped && setStatus(s))
+        .catch(() => undefined);
+    void check();
+    // While waiting for the consent tab, watch for the sign-in to land.
+    const timer = waiting ? setInterval(check, 1000) : undefined;
+    return () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [api, waiting]);
+
+  useEffect(() => {
+    if (status?.connected) setWaiting(false);
+  }, [status?.connected]);
+
+  if (!status) return null;
+  if (!status.configured) {
+    return (
+      <p className="hint wide google-status">
+        Google Sheets needs a Google Cloud OAuth client. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and restart the app (see the README).
+      </p>
+    );
+  }
+  if (status.connected) return <p className="hint wide google-status connected">✓ Connected to Google</p>;
+  return (
+    <div className="wide google-status">
+      <button
+        type="button"
+        className="ghost"
+        onClick={async () => {
+          setError(null);
+          try {
+            window.open(await api.googleStart(), "_blank", "popup,width=520,height=680");
+            setWaiting(true);
+          } catch (e) {
+            setError((e as Error).message);
+          }
+        }}
+      >
+        Connect Google account
+      </button>
+      <span className="hint">{waiting ? " Waiting for you to finish signing in…" : " Opens Google's sign-in page."}</span>
+      {error && <p className="field-error">{error}</p>}
+    </div>
+  );
+}
+
+function OpenForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: (storage: StorageDescriptor) => void }) {
   const [kind, setKind] = useState<Kind>("csv");
   const [location, setLocation] = useState("");
   const store = storeOf(kind);
@@ -114,6 +179,7 @@ function OpenForm({ busy, onSubmit }: { busy: boolean; onSubmit: (storage: Stora
       }}
     >
       <StoreSelect id="open-store" label="Store" value={kind} onChange={setKind} />
+      {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="open-location">{store.location}</label>
         <div className="row">
@@ -137,7 +203,7 @@ function OpenForm({ busy, onSubmit }: { busy: boolean; onSubmit: (storage: Stora
   );
 }
 
-function NewForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: Parameters<Api["createProject"]>[0]) => void }) {
+function NewForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: (input: Parameters<Api["createProject"]>[0]) => void }) {
   const [kind, setKind] = useState<Kind>("csv");
   const [location, setLocation] = useState("");
   const [name, setName] = useState("");
@@ -160,6 +226,7 @@ function NewForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: Paramete
       }}
     >
       <StoreSelect id="new-store" label="Store" value={kind} onChange={setKind} />
+      {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="new-location">{locationLabel}</label>
         <input
@@ -173,7 +240,11 @@ function NewForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: Paramete
           required
         />
         <p className="hint">
-          {kind === "excel" ? "A new .xlsx file; it must not exist yet." : "Created if it doesn't exist. Must not already hold a project."}
+          {kind === "excel"
+            ? "A new .xlsx file; it must not exist yet."
+            : kind === "gsheets"
+              ? "A blank Google Sheet you can edit (create one at sheets.new)."
+              : "Created if it doesn't exist. Must not already hold a project."}
         </p>
       </div>
       <div className="field">
@@ -209,7 +280,15 @@ function NewForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: Paramete
 }
 
 /** FR-25: read a project from one store and write a copy into another, then open the copy. */
-function ImportForm({ busy, onSubmit }: { busy: boolean; onSubmit: (source: StorageDescriptor, target: StorageDescriptor) => void }) {
+function ImportForm({
+  api,
+  busy,
+  onSubmit,
+}: {
+  api: Api;
+  busy: boolean;
+  onSubmit: (source: StorageDescriptor, target: StorageDescriptor) => void;
+}) {
   const [fromKind, setFromKind] = useState<Kind>("csv");
   const [from, setFrom] = useState("");
   const [toKind, setToKind] = useState<Kind>("excel");
@@ -232,6 +311,7 @@ function ImportForm({ busy, onSubmit }: { busy: boolean; onSubmit: (source: Stor
         <label htmlFor="import-to">To location</label>
         <input id="import-to" className="mono" type="text" value={to} onChange={(e) => setTo(e.target.value)} placeholder={storeOf(toKind).placeholder} required />
       </div>
+      {(fromKind === "gsheets" || toKind === "gsheets") && <GoogleConnect api={api} />}
       <p className="hint wide">The original is left untouched; the copy opens, and edits go to the copy.</p>
       <div className="actions wide">
         <button type="submit" disabled={busy}>
