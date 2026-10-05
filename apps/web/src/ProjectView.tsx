@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { DetailsPanel } from "./DetailsPanel.tsx";
 import { formatDateTime } from "./format.ts";
 import { Gantt } from "./Gantt.tsx";
@@ -9,6 +9,7 @@ export function ProjectView({ session }: { session: Session }) {
   const { snapshot, saveState, notice } = session;
   const { project } = snapshot;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
   const toggleLabel = (label: string) =>
     setActiveLabels((current) => {
@@ -34,7 +35,10 @@ export function ProjectView({ session }: { session: Session }) {
         <div>
           <h1 id="project-name">{project.name}</h1>
           <span className="meta">
-            {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDateTime(project.start)}
+            {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDateTime(project.start)} ·{" "}
+            <span className="mono" title={snapshot.storage.path}>
+              {snapshot.storage.kind === "excel" ? "Excel" : "CSV"}: {snapshot.storage.path}
+            </span>
           </span>
         </div>
         <div className="header-actions">
@@ -47,11 +51,16 @@ export function ProjectView({ session }: { session: Session }) {
           <button className="ghost" onClick={session.redo} disabled={!session.canRedo} title="Redo (Ctrl+Shift+Z)">
             Redo
           </button>
+          <button className="ghost" onClick={() => setExporting((x) => !x)} aria-expanded={exporting}>
+            Export to CSV
+          </button>
           <button className="ghost" onClick={session.close}>
             Close
           </button>
         </div>
       </header>
+
+      {exporting && <ExportForm session={session} onDone={() => setExporting(false)} />}
 
       {saveState.kind === "error" && (
         <div className="error" role="alert">
@@ -87,6 +96,50 @@ export function ProjectView({ session }: { session: Session }) {
         {selected && <DetailsPanel key={selected.id} node={selected} session={session} onClose={() => setSelectedId(null)} />}
       </div>
     </section>
+  );
+}
+
+/** FR-27: write a CSV copy of the open project, whatever store it lives in. */
+function ExportForm({ session, onDone }: { session: Session; onDone: () => void }) {
+  const [folder, setFolder] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      className="inline-form export-form"
+      aria-label="Export to CSV"
+      onSubmit={async (e: FormEvent) => {
+        e.preventDefault();
+        setBusy(true);
+        setError(null);
+        try {
+          await session.exportTo({ kind: "csv", path: folder });
+          onDone();
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <div className="field grow">
+        <label htmlFor="export-folder">CSV folder</label>
+        <input id="export-folder" className="mono" type="text" value={folder} onChange={(e) => setFolder(e.target.value)} required placeholder="A new or empty folder" />
+      </div>
+      <div className="actions">
+        <button type="submit" disabled={busy}>
+          Export
+        </button>
+        <button type="button" className="ghost" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className="field-error wide" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }
 

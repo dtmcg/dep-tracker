@@ -51,6 +51,10 @@ export function createApi(token: string, fetchFn: typeof fetch = (...args) => fe
     sendCommands: (id: string, expectedVersion: string, commands: Command[]) =>
       post<OpenedProject>(`${projectUrl(id)}/commands`, { expectedVersion, commands }),
     version: async (id: string) => (await request<{ version: string }>(`${projectUrl(id)}/version`)).version,
+    importProject: (source: StorageDescriptor, target: StorageDescriptor) =>
+      post<OpenedProject>("/api/projects/import", { source, target }),
+    exportProject: (id: string, storage: StorageDescriptor) =>
+      post<{ storage: StorageDescriptor; version: string }>(`${projectUrl(id)}/export`, { storage }),
   };
 }
 

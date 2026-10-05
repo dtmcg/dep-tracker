@@ -29,8 +29,8 @@ export interface Project {
   labelColours?: Record<string, string>;
 }
 
-/** Where a project is stored. More kinds arrive with later slices. */
-export type StorageDescriptor = { kind: "csv"; path: string };
+/** Where a project is stored. */
+export type StorageDescriptor = { kind: "csv"; path: string } | { kind: "excel"; path: string };
 
 export interface LoadedProject {
   project: Project;

@@ -6,6 +6,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { csvAdapter } from "@dep-tracker/adapter-csv";
+import { excelAdapter } from "@dep-tracker/adapter-excel";
 import { createApp } from "./app.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -20,7 +21,7 @@ before(async () => {
   staticDir = await mkdtemp(path.join(tmpdir(), "dep-tracker-web-"));
   await writeFile(path.join(staticDir, "index.html"), "<!doctype html><head><title>dep-tracker</title></head><body></body>");
   await writeFile(path.join(staticDir, "app.js"), "console.log('hi')");
-  const server = createApp({ adapters: { csv: csvAdapter }, staticDir, token: TOKEN });
+  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter }, staticDir, token: TOKEN });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => new Promise((resolve) => server.close(() => resolve()));
@@ -181,6 +182,43 @@ describe("GET /api/projects/:id and /version", () => {
     const reloaded = await (await get(`/api/projects/${opened.project.id}`)).json();
     assert.equal(reloaded.version, version);
     assert.ok(reloaded.project.nodes.some((n: { title: string }) => n.title === "Edited by hand"));
+  });
+});
+
+describe("POST /api/projects/import (FR-25)", () => {
+  it("copies a project from one store into another and opens the copy", async () => {
+    const target = path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-api-")), "plan.xlsx");
+    const res = await post("/api/projects/import", { source: { kind: "csv", path: sample }, target: { kind: "excel", path: target } });
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    assert.equal(body.storage.kind, "excel");
+    assert.equal(body.project.name, "Mobile relaunch");
+    const reread = await excelAdapter.load({ kind: "excel", path: target });
+    assert.equal(reread.project.nodes[0]?.title, "Public beta live");
+  });
+
+  it("refuses to overwrite an existing target with 409", async () => {
+    const res = await post("/api/projects/import", { source: { kind: "csv", path: sample }, target: { kind: "csv", path: sample } });
+    assert.equal(res.status, 409);
+  });
+});
+
+describe("POST /api/projects/:id/export (FR-27)", () => {
+  it("writes a CSV copy of an open project", async () => {
+    const xlsx = path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-api-")), "plan.xlsx");
+    const { body: opened } = await (async () => {
+      const res = await post("/api/projects", {
+        storage: { kind: "excel", path: xlsx },
+        name: "From Excel",
+        start: "2026-11-02T09:00:00.000Z",
+        root: { title: "Done", workTime: "1d" },
+      });
+      return { body: await res.json() };
+    })();
+    const folder = await newFolder();
+    const res = await post(`/api/projects/${opened.project.id}/export`, { storage: { kind: "csv", path: folder } });
+    assert.equal(res.status, 201);
+    assert.match(await readFile(path.join(folder, "nodes.csv"), "utf8"), /Done,1d/);
   });
 });
 

@@ -292,3 +292,9 @@ button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--dan
 .chips li { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; }
 .chip-remove { background: none; color: var(--ink-quiet); padding: 0 4px; font-size: 15px; line-height: 1; }
 .chip-remove:hover { color: var(--danger); }
+
+/* Stores, import and export (S7) */
+.mono { font-family: var(--mono); }
+input.mono { font-size: 13px; }
+.export-form { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); }
+.start .field select { width: 100%; }

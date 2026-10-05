@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type Command, invertCommands } from "@dep-tracker/domain";
+import { type Command, invertCommands, type StorageDescriptor } from "@dep-tracker/domain";
 import { type Api, ApiError, type OpenedProject } from "./api.ts";
 import { emptyHistory, type History, record, redoStep, undoStep } from "./history.ts";
 import { applyLocally } from "./projectState.ts";
@@ -15,6 +15,8 @@ export interface Session {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  /** Write a copy of the project to another store (FR-27); the open project stays where it is. */
+  exportTo: (storage: StorageDescriptor) => Promise<void>;
   close: () => void;
 }
 
@@ -138,6 +140,14 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
     };
   }, [api, reload]);
 
+  const exportTo = useCallback(
+    async (storage: StorageDescriptor) => {
+      await api.exportProject(confirmed.current.project.id, storage);
+      setNotice(`Exported a copy to ${storage.path}`);
+    },
+    [api],
+  );
+
   return {
     snapshot,
     saveState,
@@ -147,6 +157,7 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
     redo,
     canUndo: history.undo.length > 0,
     canRedo: history.redo.length > 0,
+    exportTo,
     close: onClose,
   };
 }

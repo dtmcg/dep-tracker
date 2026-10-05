@@ -146,13 +146,33 @@ export function createApp(options: AppOptions): Server {
       }
     }
 
-    const match = /^\/api\/projects\/([^/]+)(\/commands|\/version)?$/.exec(url.pathname);
+    if (route === "POST /api/projects/import") {
+      const body = await readJson(req);
+      const source = parseDescriptor(body.source);
+      const target = parseDescriptor(body.target);
+      try {
+        const { project } = await adapterFor(source).load(source);
+        const version = await adapterFor(target).create(target, project);
+        return sendJson(res, 201, opened(target, { project, version }));
+      } catch (error) {
+        throw toHttp(error);
+      }
+    }
+
+    const match = /^\/api\/projects\/([^/]+)(\/commands|\/version|\/export)?$/.exec(url.pathname);
     if (match) {
       const id = decodeURIComponent(match[1]!);
       const { descriptor, adapter } = registered(id);
       try {
         if (req.method === "GET" && !match[2]) return sendJson(res, 200, opened(descriptor, await adapter.load(descriptor)));
         if (req.method === "GET" && match[2] === "/version") return sendJson(res, 200, { version: await adapter.version(descriptor) });
+        if (req.method === "POST" && match[2] === "/export") {
+          // Writes a copy; the open project stays where it is.
+          const target = parseDescriptor((await readJson(req)).storage);
+          const { project } = await adapter.load(descriptor);
+          const version = await adapterFor(target).create(target, project);
+          return sendJson(res, 201, { storage: target, version });
+        }
         if (req.method === "POST" && match[2] === "/commands") {
           const body = await readJson(req);
           if (typeof body.expectedVersion !== "string" || !Array.isArray(body.commands)) {

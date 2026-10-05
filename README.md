@@ -15,8 +15,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S4 Cycles | Cycles flagged with a banner, dependents blocked, the rest still dated; orphans flagged | Done |
 | S5 Selection and animation | Dependencies and dependents highlighted, rest dimmed, critical chain emphasised, dashes flow at a speed scaled to work time | Done |
 | S6 Labels | Labels with autocomplete, a label key with counts, saved colours (presets or picker), toggled highlighting | Done |
-| S7 Excel adapter | Open, edit and import into Excel | Next |
-| S8–S11 | See the PRD's delivery plan | Planned |
+| S7 Excel adapter | Open, create and edit .xlsx workbooks; import between stores; export to CSV | Done |
+| S8 Obsidian adapter | Open and edit a vault folder | Next |
+| S9–S11 | See the PRD's delivery plan | Planned |
 
 ## Getting started
 
@@ -44,6 +45,8 @@ Open http://127.0.0.1:4317, paste the full path of a project folder (try `fixtur
 ```
 packages/domain        Model, duration parsing, scheduling engine (shared by server and web)
 packages/adapter-csv   CSV storage adapter
+packages/adapter-excel Excel (.xlsx) storage adapter
+packages/xlsx          Minimal dependency-free .xlsx reader/writer (zip + SpreadsheetML)
 packages/storage-conformance  Shared test suite every storage adapter must pass
 apps/server            Local API server (node:http), also serves the built web app
 apps/web               React UI, bundled with esbuild
@@ -64,6 +67,16 @@ nodes.csv     id, title, work_time, not_before, labels, description, links
 edges.csv     dependent_id, dependency_id   (optional while a project has no dependencies)
 labels.csv    label, colour                 (optional; colours as #rrggbb)
 ```
+
+## Excel workbook format
+
+One .xlsx file with three sheets, made to be read and edited by hand:
+
+- **Project**: Field / Value rows for ID, Name, Start (a real date cell) and Success criteria (a task title).
+- **Tasks**: one row per task with ID, Title, Work time (e.g. `3d`), Not before, Depends on, Labels, Description, Links, and greyed Starts / Completes columns that the app fills in and never reads back. Depends on lists dependency titles separated by semicolons; write `Title [id]` when two tasks share a title. A row you add without an ID gets one on the next save.
+- **Labels**: Label / Colour (`#rrggbb`).
+
+When the app saves, your own extra columns in Tasks and any other sheets you add are kept. Formatting you apply to the three sheets above is not.
 
 ## Stack choices
 

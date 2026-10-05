@@ -70,4 +70,17 @@ describe("api client", () => {
     }) as typeof fetch;
     await assert.rejects(createApi("tok", down).openProject({ kind: "csv", path: "x" }), /server/i);
   });
+
+  it("imports a project from one store into another", async () => {
+    const { calls, fetchFn } = recorder(201, opened);
+    await createApi("tok", fetchFn).importProject({ kind: "csv", path: "a" }, { kind: "excel", path: "b.xlsx" });
+    assert.equal(calls[0]?.url, "/api/projects/import");
+    assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), { source: { kind: "csv", path: "a" }, target: { kind: "excel", path: "b.xlsx" } });
+  });
+
+  it("exports an open project", async () => {
+    const { calls, fetchFn } = recorder(201, { storage: { kind: "csv", path: "out" }, version: "v" });
+    await createApi("tok", fetchFn).exportProject("p1", { kind: "csv", path: "out" });
+    assert.equal(calls[0]?.url, "/api/projects/p1/export");
+  });
 });
