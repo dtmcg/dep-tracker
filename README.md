@@ -2,7 +2,7 @@
 
 Project Dependency Manager: a locally run web app that models a project as a dependency graph rooted in its success criteria and shows when each item can realistically finish, as a graph-based Gantt chart. Projects live in CSV, Excel, Google Sheets or Obsidian.
 
-The product requirements are in the PRD ("PRD — Project Dependency Manager"). Work is delivered as thin end-to-end slices, each built test-first.
+The product requirements are in [features/PRD.md](features/PRD.md). Work is delivered as thin end-to-end slices, each built test-first.
 
 ## Status
 
