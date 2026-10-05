@@ -1,42 +1,17 @@
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, type Page, test } from "playwright/test";
-
-async function newProject(page: Page, start: string, root: string, work: string) {
-  const folder = path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-e2e-")), "plan");
-  await page.goto("/");
-  await page.getByRole("tab", { name: "New project" }).click();
-  await page.getByLabel("Folder").fill(folder);
-  await page.getByLabel("Project name").fill("Release plan");
-  await page.getByLabel("Start").fill(start);
-  await page.getByLabel("Success criteria").fill(root);
-  await page.getByLabel("Work time").fill(work);
-  await page.getByRole("button", { name: "Create project" }).click();
-  await expect(page.getByRole("heading", { name: "Release plan" })).toBeVisible();
-  return folder;
-}
-
-async function addDependency(page: Page, of: string, title: string, work: string) {
-  await page.getByRole("article", { name: of }).getByRole("button", { name: "Add dependency" }).click();
-  const form = page.getByRole("form", { name: `New dependency of ${of}` });
-  await form.getByLabel("Title").fill(title);
-  await form.getByLabel("Work time").fill(work);
-  await form.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("article", { name: title })).toBeVisible();
-}
+import { expect, test } from "playwright/test";
+import { addDependency, bar, details as openDetails, newProject } from "./helpers.ts";
 
 // Slice S2 acceptance: clicking a node shows work time, not-before, dependency
 // time, completion, rendered description and links; the PRD's worked example
 // passes; edits to any field recompute instantly. Undo/redo (FR-13) included.
 test("S2: node details, the worked example, live edits and undo/redo", async ({ page }) => {
-  const folder = await newProject(page, "2026-10-28T09:00", "Release", "2d");
+  const folder = await newProject(page, { start: "2026-10-28T09:00", root: "Release", work: "2d" });
   await addDependency(page, "Release", "Docs", "2d"); // finishes 30 Oct
   await addDependency(page, "Release", "Payments", "1w"); // finishes 4 Nov
 
-  const release = page.getByRole("article", { name: "Release" });
-  await release.getByRole("button", { name: "Release", exact: true }).click();
-  const details = release.getByRole("region", { name: "Details of Release" });
+  const details = await openDetails(page, "Release");
   await expect(details.getByTestId("detail-work")).toHaveText("2d");
   await expect(details.getByTestId("detail-not-before")).toHaveText("None");
   await expect(details.getByTestId("detail-dependency-time")).toHaveText("Wed 4 Nov 2026, 09:00");
@@ -76,14 +51,12 @@ test("S2: node details, the worked example, live edits and undo/redo", async ({ 
 });
 
 test("S2: deleting a dependency recomputes its dependents", async ({ page }) => {
-  await newProject(page, "2026-10-28T09:00", "Release", "2d");
+  await newProject(page, { start: "2026-10-28T09:00", root: "Release", work: "2d" });
   await addDependency(page, "Release", "Payments", "1w");
-  const release = page.getByRole("article", { name: "Release" });
+  const release = bar(page, "Release");
   await expect(release.getByTestId("completion")).toHaveAttribute("datetime", "2026-11-06T09:00:00.000Z");
 
-  const payments = page.getByRole("article", { name: "Payments" });
-  await payments.getByRole("button", { name: "Payments", exact: true }).click();
-  await payments.getByRole("button", { name: "Delete node" }).click();
-  await expect(page.getByRole("article", { name: "Payments" })).toHaveCount(0);
+  await (await openDetails(page, "Payments")).getByRole("button", { name: "Delete node" }).click();
+  await expect(bar(page, "Payments")).toHaveCount(0);
   await expect(release.getByTestId("completion")).toHaveAttribute("datetime", "2026-10-30T09:00:00.000Z");
 });

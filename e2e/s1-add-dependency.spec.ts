@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "playwright/test";
+import { details } from "./helpers.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +26,7 @@ test("S1: create a project, add a dependency, and see dates update and persist",
   const root = page.getByRole("article", { name: "Public beta live" });
   await expect(root.getByTestId("completion")).toHaveAttribute("datetime", "2026-11-04T09:00:00.000Z");
 
-  await root.getByRole("button", { name: "Add dependency" }).click();
+  await (await details(page, "Public beta live")).getByRole("button", { name: "Add dependency" }).click();
   const form = page.getByRole("form", { name: "New dependency of Public beta live" });
   await form.getByLabel("Title").fill("Payments integration");
   await form.getByLabel("Work time").fill("3d");
