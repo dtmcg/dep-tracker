@@ -30,6 +30,9 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
   const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay }), [project, schedule, pxPerDay]);
   const titleOf = useMemo(() => new Map(project.nodes.map((n) => [n.id, n.title])), [project.nodes]);
   const nodeOf = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
+  const isCyclic = (id: string) => schedule.flags[id]?.includes("cyclic") ?? false;
+  const stateOf = (id: string) =>
+    isCyclic(id) ? "cyclic" : schedule.flags[id]?.includes("blockedByCycle") ? "blocked" : schedule.nodes[id] ? "ok" : "error";
   const xOf = useCallback((ms: number) => ((ms - layout.origin) / DAY_MS) * pxPerDay, [layout.origin, pxPerDay]);
 
   const fit = useCallback(() => {
@@ -193,11 +196,12 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
             </defs>
             {layout.edges.map((e) => (
               <path
+                data-cyclic={String(isCyclic(e.dependencyId) && isCyclic(e.dependentId))}
                 key={`${e.dependencyId}>${e.dependentId}`}
                 data-edge={`${e.dependencyId}>${e.dependentId}`}
                 data-edge-dependency={titleOf.get(e.dependencyId)}
                 data-edge-dependent={titleOf.get(e.dependentId)}
-                className="edge"
+                className={isCyclic(e.dependencyId) && isCyclic(e.dependentId) ? "edge cyclic" : "edge"}
                 d={roundedPath(e.points)}
                 markerEnd="url(#arrow)"
               />
@@ -217,6 +221,8 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
                 data-root={String(isRoot)}
                 data-selected={selectedId === b.id}
                 data-timed={b.timed}
+                data-state={stateOf(b.id)}
+                data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}
                 className="bar-row"
                 style={{ left: b.x, top: barTop(b.row), height: BAR_HEIGHT }}
               >
@@ -234,8 +240,11 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
                         {formatDateTime(times.completion)}
                       </time>
                     ) : (
-                      <span className="bar-note">{schedule.errors[b.id] ?? "Not scheduled"}</span>
+                      <span className="bar-note">
+                        {stateOf(b.id) === "cyclic" ? "cycle" : stateOf(b.id) === "blocked" ? "blocked by a cycle" : "can't schedule"}
+                      </span>
                     )}
+                    {schedule.flags[b.id]?.includes("orphan") && <span className="bar-badge">not linked to the success criteria</span>}
                   </span>
                 </button>
                 <span

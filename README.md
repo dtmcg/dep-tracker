@@ -12,8 +12,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S1 Add a dependency | Create a project, add dependency nodes; dates update and persist to CSV | Done |
 | S2 Full scheduling and details | Not-before dates, dependency time, expandable editable node details, undo/redo | Done |
 | S3 Graph-Gantt layout | Bars on a time axis, dependency edges, zoom/pan/fit/today, details panel, connect by drag or from the panel | Done |
-| S4 Cycles | Cycles flagged, downstream not timed | Next |
-| S5–S11 | See the PRD's delivery plan | Planned |
+| S4 Cycles | Cycles flagged with a banner, dependents blocked, the rest still dated; orphans flagged | Done |
+| S5 Selection and animation | Upstream and downstream highlight, animated edges | Next |
+| S6–S11 | See the PRD's delivery plan | Planned |
 
 ## Getting started
 

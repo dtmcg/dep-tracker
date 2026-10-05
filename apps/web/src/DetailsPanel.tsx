@@ -53,6 +53,9 @@ export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; se
             </div>
           </dl>
           {!times && <p className="warn">{snapshot.schedule.errors[node.id]}</p>}
+          {snapshot.schedule.flags[node.id]?.includes("orphan") && (
+            <p className="hint">Not linked to the success criteria: nothing on its path depends on this node.</p>
+          )}
           {node.description ? (
             <div className="description" dangerouslySetInnerHTML={{ __html: description }} />
           ) : (

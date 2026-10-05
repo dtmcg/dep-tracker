@@ -47,6 +47,10 @@ export function ProjectView({ session }: { session: Session }) {
         </div>
       )}
 
+      {snapshot.schedule.cycles.length > 0 && (
+        <CycleBanner cycles={snapshot.schedule.cycles} titleOf={(id) => project.nodes.find((n) => n.id === id)?.title ?? id} onSelect={setSelectedId} />
+      )}
+
       <div className={selected ? "workspace with-panel" : "workspace"}>
         <Gantt
           project={project}
@@ -57,6 +61,32 @@ export function ProjectView({ session }: { session: Session }) {
         />
         {selected && <DetailsPanel key={selected.id} node={selected} session={session} onClose={() => setSelectedId(null)} />}
       </div>
+    </section>
+  );
+}
+
+/** Lists each dependency cycle; its node names select the node (FR-4). */
+function CycleBanner({ cycles, titleOf, onSelect }: { cycles: string[][]; titleOf: (id: string) => string; onSelect: (id: string) => void }) {
+  return (
+    <section className="cycle-banner" role="region" aria-label="Dependency cycles">
+      <strong>
+        {cycles.length === 1 ? "A dependency cycle" : `${cycles.length} dependency cycles`} — these nodes and everything that depends on
+        them can't be scheduled until it is broken.
+      </strong>
+      <ul>
+        {cycles.map((path) => (
+          <li key={path.join(">")}>
+            {path.map((id, i) => (
+              <span key={`${id}-${i}`}>
+                {i > 0 && " → "}
+                <button className="link-button" onClick={() => onSelect(id)}>
+                  {titleOf(id)}
+                </button>
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

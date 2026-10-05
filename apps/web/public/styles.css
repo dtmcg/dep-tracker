@@ -215,3 +215,17 @@ button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--dan
   .workspace.with-panel { grid-template-columns: 1fr; }
   .details-panel { position: static; max-height: none; }
 }
+
+/* Cycles (S4) */
+.cycle-banner {
+  margin: 0 0 16px; padding: 12px 14px; border-radius: 8px;
+  background: var(--danger-bg); color: var(--danger); border: 1px solid currentColor;
+}
+.cycle-banner ul { margin: 6px 0 0; padding-left: 18px; }
+.cycle-banner li { color: var(--ink); }
+.link-button { background: none; border: 0; padding: 0; color: var(--danger); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.bar-row[data-state="cyclic"] .bar { background: var(--danger-bg); border: 1.5px dashed var(--danger); }
+.bar-row[data-state="cyclic"] .bar-note { color: var(--danger); font-weight: 600; }
+.bar-row[data-state="blocked"] .bar { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--danger) 60%, var(--line)); }
+.edge.cyclic { stroke: var(--danger); stroke-width: 2; opacity: 1; }
+.bar-badge { font-size: 11px; color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 999px; padding: 0 6px; }

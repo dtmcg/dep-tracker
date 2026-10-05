@@ -72,8 +72,18 @@ export interface NodeTimes {
   dependencyTime?: string;
 }
 
+/**
+ * cyclic: part of a dependency cycle. blockedByCycle: depends, directly or not,
+ * on a cyclic node. orphan: not reachable from the success criteria.
+ */
+export type NodeFlag = "cyclic" | "blockedByCycle" | "orphan";
+
 export interface Schedule {
   nodes: Record<string, NodeTimes>;
   /** Per-node problems that prevented a node being timed. */
   errors: Record<string, string>;
+  /** Only flagged nodes appear. */
+  flags: Record<string, NodeFlag[]>;
+  /** Each cycle as a closed path following "depends on" edges, e.g. [a, b, a]. */
+  cycles: string[][];
 }
