@@ -21,6 +21,13 @@ export const STORES: { kind: Kind; name: string; location: string; hint: string;
     hint: "An .xlsx file with Project and Tasks sheets.",
     placeholder: "C:\\Users\\you\\Documents\\my-plan.xlsx",
   },
+  {
+    kind: "obsidian",
+    name: "Obsidian vault folder",
+    location: "Vault folder",
+    hint: "A folder inside your vault holding one note per task and a \"(project)\" note.",
+    placeholder: "C:\\Users\\you\\Vault\\Projects\\my-plan",
+  },
 ];
 const storeOf = (kind: Kind) => STORES.find((s) => s.kind === kind)!;
 
@@ -137,7 +144,7 @@ function NewForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: Paramete
   const [start, setStart] = useState("");
   const [rootTitle, setRootTitle] = useState("");
   const [workTime, setWorkTime] = useState("1d");
-  const locationLabel = kind === "csv" ? "Folder" : "Workbook file";
+  const locationLabel = kind === "csv" ? "Folder" : storeOf(kind).location;
 
   return (
     <form
@@ -166,7 +173,7 @@ function NewForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: Paramete
           required
         />
         <p className="hint">
-          {kind === "csv" ? "Created if it doesn't exist. Must not already hold a project." : "A new .xlsx file; it must not exist yet."}
+          {kind === "excel" ? "A new .xlsx file; it must not exist yet." : "Created if it doesn't exist. Must not already hold a project."}
         </p>
       </div>
       <div className="field">

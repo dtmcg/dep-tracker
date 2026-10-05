@@ -30,7 +30,10 @@ export interface Project {
 }
 
 /** Where a project is stored. */
-export type StorageDescriptor = { kind: "csv"; path: string } | { kind: "excel"; path: string };
+export type StorageDescriptor =
+  | { kind: "csv"; path: string }
+  | { kind: "excel"; path: string }
+  | { kind: "obsidian"; path: string };
 
 export interface LoadedProject {
   project: Project;

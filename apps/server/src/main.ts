@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { csvAdapter } from "@dep-tracker/adapter-csv";
 import { excelAdapter } from "@dep-tracker/adapter-excel";
+import { obsidianAdapter } from "@dep-tracker/adapter-obsidian";
 import { createApp } from "./app.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -12,7 +13,7 @@ const host = "127.0.0.1";
 const token = randomBytes(24).toString("hex");
 
 const server = createApp({
-  adapters: { csv: csvAdapter, excel: excelAdapter },
+  adapters: { csv: csvAdapter, excel: excelAdapter, obsidian: obsidianAdapter },
   staticDir: path.resolve(here, "../../web/dist"),
   token,
 });

@@ -16,8 +16,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S5 Selection and animation | Dependencies and dependents highlighted, rest dimmed, critical chain emphasised, dashes flow at a speed scaled to work time | Done |
 | S6 Labels | Labels with autocomplete, a label key with counts, saved colours (presets or picker), toggled highlighting | Done |
 | S7 Excel adapter | Open, create and edit .xlsx workbooks; import between stores; export to CSV | Done |
-| S8 Obsidian adapter | Open and edit a vault folder | Next |
-| S9–S11 | See the PRD's delivery plan | Planned |
+| S8 Obsidian adapter | One note per task in a vault folder, wikilink dependencies, tags for labels | Done |
+| S9 Google Sheets adapter | Sign in, open and edit a Google Sheet | Next |
+| S10–S11 | See the PRD's delivery plan | Planned |
 
 ## Getting started
 
@@ -47,6 +48,7 @@ packages/domain        Model, duration parsing, scheduling engine (shared by ser
 packages/adapter-csv   CSV storage adapter
 packages/adapter-excel Excel (.xlsx) storage adapter
 packages/xlsx          Minimal dependency-free .xlsx reader/writer (zip + SpreadsheetML)
+packages/adapter-obsidian  Obsidian vault folder adapter (notes with frontmatter)
 packages/storage-conformance  Shared test suite every storage adapter must pass
 apps/server            Local API server (node:http), also serves the built web app
 apps/web               React UI, bundled with esbuild
@@ -77,6 +79,32 @@ One .xlsx file with three sheets, made to be read and edited by hand:
 - **Labels**: Label / Colour (`#rrggbb`).
 
 When the app saves, your own extra columns in Tasks and any other sheets you add are kept. Formatting you apply to the three sheets above is not.
+
+## Obsidian vault format
+
+A folder inside your vault, with one note per task named after its title:
+
+```markdown
+---
+id: n02
+work_time: 1w
+not_before: 2026-11-02T09:00
+depends_on:
+  - "[[API contract agreed]]"
+tags:
+  - team/platform
+links:
+  - https://example.com/spec
+---
+The note body is the task's description.
+```
+
+- Dependencies are wikilinks, so Obsidian's graph view shows the plan. Renaming a note in Obsidian (which updates links) keeps its edges.
+- Labels are tags; a `:` in a label is written as `/` (`team:web` ↔ `#team/web`), because Obsidian tags can't contain colons.
+- A project note, `<project name> (project).md`, holds `dep_tracker: project`, `start`, `success_criteria: "[[Task]]"` and `label_colours`.
+- A note you create by hand becomes a task when it has a `work_time`; it gets an `id` on the next save. Notes without `id` or `work_time` are left alone.
+- When the app saves, it keeps note bodies and frontmatter keys it doesn't own. A task deleted in the app moves to the folder's `.trash`, and the previous text of every changed note is kept in `.dep-tracker-backup`. Both are hidden from Obsidian.
+- Times are stored to the minute in local time, which is the format Obsidian's date-time properties use. The PRD suggested naming the root note after the project. I gave the project its own note instead, because the success criteria task already has its own title.
 
 ## Stack choices
 
