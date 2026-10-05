@@ -10,8 +10,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | --- | --- | --- |
 | S0 Walking skeleton | Open a CSV project and see its root node with its completion time | Done |
 | S1 Add a dependency | Create a project, add dependency nodes; dates update and persist to CSV | Done |
-| S2 Full scheduling and details | Not-before dates, dependency time, expandable editable node details | Next |
-| S3–S11 | See the PRD's delivery plan | Planned |
+| S2 Full scheduling and details | Not-before dates, dependency time, expandable editable node details, undo/redo | Done |
+| S3 Graph-Gantt layout | Bars on a time axis with layered rows | Next |
+| S4–S11 | See the PRD's delivery plan | Planned |
 
 ## Getting started
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Command } from "@dep-tracker/domain";
+import { type Command, invertCommands } from "@dep-tracker/domain";
 import { type Api, ApiError, type OpenedProject } from "./api.ts";
+import { emptyHistory, type History, record, redoStep, undoStep } from "./history.ts";
 import { applyLocally } from "./projectState.ts";
 
 export type SaveState = { kind: "saved" } | { kind: "saving" } | { kind: "error"; message: string };
@@ -10,6 +11,10 @@ export interface Session {
   saveState: SaveState;
   notice: string | null;
   apply: (commands: Command[]) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   close: () => void;
 }
 
@@ -28,6 +33,12 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
   const latest = useRef(initial); // what the user currently sees, including unsaved edits
   const queue = useRef(Promise.resolve());
   const pending = useRef(0);
+  const [history, setHistory] = useState<History>(emptyHistory);
+  const historyRef = useRef<History>(emptyHistory);
+  const setHist = useCallback((next: History) => {
+    historyRef.current = next;
+    setHistory(next);
+  }, []);
 
   const reload = useCallback(
     async (message: string) => {
@@ -36,8 +47,9 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
       latest.current = fresh;
       setSnapshot(fresh);
       setNotice(message || null);
+      setHist(emptyHistory); // inverses no longer apply to a reloaded project
     },
-    [api],
+    [api, setHist],
   );
 
   const show = useCallback((next: OpenedProject) => {
@@ -45,11 +57,14 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
     setSnapshot(next);
   }, []);
 
-  const apply = useCallback(
-    (commands: Command[]) => {
+  const send = useCallback(
+    (commands: Command[], onApplied: (inverse: Command[]) => void) => {
       let optimistic: OpenedProject;
+      let inverse: Command[];
       try {
+        inverse = invertCommands(latest.current.project, commands);
         optimistic = { ...latest.current, ...applyLocally(latest.current, commands) };
+        onApplied(inverse);
       } catch (error) {
         setSaveState({ kind: "error", message: (error as Error).message });
         return;
@@ -71,6 +86,7 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
           pending.current -= 1;
           const conflict = error instanceof ApiError && error.status === 409;
           show(confirmed.current);
+          setHist(emptyHistory);
           setSaveState({
             kind: "error",
             message: conflict
@@ -81,8 +97,23 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
         }
       });
     },
-    [api, reload, show],
+    [api, reload, show, setHist],
   );
+
+  const apply = useCallback(
+    (commands: Command[]) => send(commands, (inverse) => setHist(record(historyRef.current, commands, inverse))),
+    [send, setHist],
+  );
+
+  const undo = useCallback(() => {
+    const step = undoStep(historyRef.current);
+    if (step) send(step.commands, () => setHist(step.history));
+  }, [send, setHist]);
+
+  const redo = useCallback(() => {
+    const step = redoStep(historyRef.current);
+    if (step) send(step.commands, () => setHist(step.history));
+  }, [send, setHist]);
 
   // Detect edits made outside the app: poll, and check again when the window regains focus.
   useEffect(() => {
@@ -107,5 +138,15 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
     };
   }, [api, reload]);
 
-  return { snapshot, saveState, notice, apply, close: onClose };
+  return {
+    snapshot,
+    saveState,
+    notice,
+    apply,
+    undo,
+    redo,
+    canUndo: history.undo.length > 0,
+    canRedo: history.redo.length > 0,
+    close: onClose,
+  };
 }

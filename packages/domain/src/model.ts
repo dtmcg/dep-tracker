@@ -68,6 +68,8 @@ export class ProjectExistsError extends Error {
 export interface NodeTimes {
   start: string;
   completion: string;
+  /** Latest completion among the node's dependencies; absent when it has none. */
+  dependencyTime?: string;
 }
 
 export interface Schedule {

@@ -29,14 +29,20 @@ export function schedule(project: Project): Schedule {
     }
     visiting.add(id);
 
-    let ready = anchor;
+    let dependencyTime: number | undefined;
     let blockedBy: string | undefined;
     for (const depId of deps.get(id) ?? []) {
       const done = visit(depId);
       if (done === null) blockedBy ??= byId.get(depId)?.title ?? depId;
-      else ready = Math.max(ready, done);
+      else dependencyTime = Math.max(dependencyTime ?? -Infinity, done);
     }
     visiting.delete(id);
+    const notBefore = node.notBefore ? Date.parse(node.notBefore) : undefined;
+    // Project start applies only when there is neither a not-before date nor a dependency.
+    const ready =
+      notBefore === undefined && dependencyTime === undefined
+        ? anchor
+        : Math.max(notBefore ?? -Infinity, dependencyTime ?? -Infinity);
 
     let value: number | null = null;
     if (blockedBy !== undefined) {
@@ -46,6 +52,7 @@ export function schedule(project: Project): Schedule {
         const work = parseDuration(node.workTime);
         value = ready + work;
         result.nodes[id] = { start: new Date(ready).toISOString(), completion: new Date(value).toISOString() };
+        if (dependencyTime !== undefined) result.nodes[id].dependencyTime = new Date(dependencyTime).toISOString();
       } catch (error) {
         result.errors[id] = (error as Error).message;
       }
