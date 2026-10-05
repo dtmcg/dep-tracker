@@ -2,16 +2,19 @@ import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback
 import { criticalEdges, dependenciesOf, dependentsOf, parseDuration, type Project, type Schedule } from "@dep-tracker/domain";
 import { dashSeconds } from "./animation.ts";
 import { formatDateTime } from "./format.ts";
+import { activeLabels as labelsOn, labelColour } from "./labels.ts";
 import { BAR_HEIGHT, DAY_MS, fitPxPerDay, layoutGantt, ROW_HEIGHT, timeTicks, ZOOM_LEVELS } from "./layout.ts";
 
 /** Room to the right of the last bar for its title and date. */
-const LABEL_SPACE = 240;
+const LABEL_SPACE = 320;
 const AXIS_HEIGHT = 32;
 
 interface GanttProps {
   project: Project;
   schedule: Schedule;
   selectedId: string | null;
+  /** Labels switched on in the label key. */
+  activeLabels: Set<string>;
   onSelect: (id: string | null) => void;
   onConnect: (dependencyId: string, dependentId: string) => void;
 }
@@ -24,7 +27,7 @@ function nearestZoom(pxPerDay: number): ZoomName {
   ).name;
 }
 
-export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: GanttProps) {
+export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, onConnect }: GanttProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [pxPerDay, setPxPerDay] = useState<number>(ZOOM_LEVELS[1].pxPerDay);
   const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay }), [project, schedule, pxPerDay]);
@@ -260,6 +263,8 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
             const node = nodeOf.get(b.id)!;
             const times = schedule.nodes[b.id];
             const isRoot = b.id === project.rootId;
+            const on = labelsOn(node, activeLabels);
+            const rings = on.map((label, i) => `0 0 0 ${2 + i * 3}px ${labelColour(project, label)}`).join(", ");
             return (
               <article
                 key={b.id}
@@ -268,6 +273,7 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
                 data-root={String(isRoot)}
                 data-selected={selectedId === b.id}
                 data-highlight={barHighlight(b.id)}
+                data-labels-active={on.length ? on.join(" ") : undefined}
                 data-timed={b.timed}
                 data-state={stateOf(b.id)}
                 data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}
@@ -280,7 +286,15 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
                   aria-pressed={selectedId === b.id}
                   onClick={() => onSelect(selectedId === b.id ? null : b.id)}
                 >
-                  <span className="bar" data-testid="bar" style={{ width: Math.max(b.width, 2) }} />
+                  <span className="bar" data-testid="bar" style={{ width: Math.max(b.width, 2), boxShadow: rings || undefined }} />
+                  {/* Inside the button, so a click here still selects; a drag from it connects (FR-10). */}
+                  <span
+                    className="connector"
+                    data-testid="connector"
+                    data-connector-for={b.id}
+                    style={{ left: Math.max(b.width, 2) - 5 }}
+                    title="Drag onto another bar to make it depend on this one"
+                  />
                   <span className="bar-label">
                     <span className="bar-title">{node.title}</span>
                     {times ? (
@@ -293,15 +307,18 @@ export function Gantt({ project, schedule, selectedId, onSelect, onConnect }: Ga
                       </span>
                     )}
                     {schedule.flags[b.id]?.includes("orphan") && <span className="bar-badge">not linked to the success criteria</span>}
+                    {on.map((label) => (
+                      <span
+                        key={label}
+                        className="label-chip"
+                        data-testid="active-label"
+                        style={{ "--label-colour": labelColour(project, label) } as CSSProperties}
+                      >
+                        {label}
+                      </span>
+                    ))}
                   </span>
                 </button>
-                <span
-                  className="connector"
-                  data-testid="connector"
-                  data-connector-for={b.id}
-                  style={{ left: Math.max(b.width, 2) - 5 }}
-                  title="Drag onto another bar to make it depend on this one"
-                />
               </article>
             );
           })}

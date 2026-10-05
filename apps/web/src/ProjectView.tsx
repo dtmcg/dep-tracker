@@ -2,12 +2,21 @@ import { useEffect, useState } from "react";
 import { DetailsPanel } from "./DetailsPanel.tsx";
 import { formatDateTime } from "./format.ts";
 import { Gantt } from "./Gantt.tsx";
+import { LabelKey } from "./LabelKey.tsx";
 import type { Session } from "./useProjectSession.ts";
 
 export function ProjectView({ session }: { session: Session }) {
   const { snapshot, saveState, notice } = session;
   const { project } = snapshot;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set());
+  const toggleLabel = (label: string) =>
+    setActiveLabels((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
   const selected = project.nodes.find((n) => n.id === selectedId) ?? null;
   useUndoShortcuts(session);
   useEffect(() => {
@@ -59,11 +68,19 @@ export function ProjectView({ session }: { session: Session }) {
         <CycleBanner cycles={snapshot.schedule.cycles} titleOf={(id) => project.nodes.find((n) => n.id === id)?.title ?? id} onSelect={setSelectedId} />
       )}
 
+      <LabelKey
+        project={project}
+        active={activeLabels}
+        onToggle={toggleLabel}
+        onColour={(label, colour) => session.apply([{ type: "setLabelColour", label, colour }])}
+      />
+
       <div className={selected ? "workspace with-panel" : "workspace"}>
         <Gantt
           project={project}
           schedule={snapshot.schedule}
           selectedId={selectedId}
+          activeLabels={activeLabels}
           onSelect={setSelectedId}
           onConnect={(dependencyId, dependentId) => session.apply([{ type: "addEdge", dependentId, dependencyId }])}
         />

@@ -102,6 +102,8 @@ export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; se
             />
           )}
 
+          <NodeLabels node={node} session={session} />
+
           <section className="relations" aria-label="Depends on">
             <h3>Depends on</h3>
             {dependencies.length === 0 ? (
@@ -140,6 +142,53 @@ export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; se
         </>
       )}
     </aside>
+  );
+}
+
+function NodeLabels({ node, session }: { node: ProjectNode; session: Session }) {
+  const [draft, setDraft] = useState("");
+  const all = [...new Set(session.snapshot.project.nodes.flatMap((n) => n.labels))].sort();
+  const suggestions = all.filter((l) => !node.labels.includes(l));
+  const setLabels = (labels: string[]) => session.apply([{ type: "updateNode", id: node.id, changes: { labels } }]);
+  const listId = `label-options-${node.id}`;
+  const inputId = `label-input-${node.id}`;
+  return (
+    <section className="relations node-labels" aria-label="Node labels">
+      <h3>Labels</h3>
+      {node.labels.length > 0 && (
+        <ul className="chips">
+          {node.labels.map((label) => (
+            <li key={label}>
+              {label}
+              <button
+                className="chip-remove"
+                aria-label={`Remove label ${label}`}
+                onClick={() => setLabels(node.labels.filter((l) => l !== label))}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form
+        className="connect"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          const label = draft.trim();
+          if (label && !node.labels.includes(label)) setLabels([...node.labels, label]);
+          setDraft("");
+        }}
+      >
+        <label htmlFor={inputId}>Add label</label>
+        <input id={inputId} type="text" list={listId} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. risk or team:web" />
+        <datalist id={listId}>
+          {suggestions.map((l) => (
+            <option key={l} value={l} />
+          ))}
+        </datalist>
+      </form>
+    </section>
   );
 }
 

@@ -14,8 +14,9 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S3 Graph-Gantt layout | Bars on a time axis, dependency edges, zoom/pan/fit/today, details panel, connect by drag or from the panel | Done |
 | S4 Cycles | Cycles flagged with a banner, dependents blocked, the rest still dated; orphans flagged | Done |
 | S5 Selection and animation | Dependencies and dependents highlighted, rest dimmed, critical chain emphasised, dashes flow at a speed scaled to work time | Done |
-| S6 Labels | Labels, legend, colours, highlight | Next |
-| S7–S11 | See the PRD's delivery plan | Planned |
+| S6 Labels | Labels with autocomplete, a label key with counts, saved colours (presets or picker), toggled highlighting | Done |
+| S7 Excel adapter | Open, edit and import into Excel | Next |
+| S8–S11 | See the PRD's delivery plan | Planned |
 
 ## Getting started
 
@@ -61,6 +62,7 @@ A project is a folder with three files. Multi-value cells (labels, links) are se
 project.csv   id, name, start, root_id
 nodes.csv     id, title, work_time, not_before, labels, description, links
 edges.csv     dependent_id, dependency_id   (optional while a project has no dependencies)
+labels.csv    label, colour                 (optional; colours as #rrggbb)
 ```
 
 ## Stack choices

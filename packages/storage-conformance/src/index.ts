@@ -51,6 +51,7 @@ export function richProject(): Project {
       { dependentId: "n01", dependencyId: "n02" },
       { dependentId: "n02", dependencyId: "n03" },
     ],
+    labelColours: { risk: "#cc0000", "team:web": "#0b7f73" },
   };
 }
 
@@ -59,6 +60,7 @@ export function normalised(project: Project): Project {
   const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return {
     ...project,
+    labelColours: project.labelColours ?? {},
     nodes: [...project.nodes].sort((a, b) => byText(a.id, b.id)),
     edges: [...project.edges].sort((a, b) =>
       byText(`${a.dependentId}>${a.dependencyId}`, `${b.dependentId}>${b.dependencyId}`),

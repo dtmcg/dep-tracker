@@ -256,3 +256,39 @@ button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--dan
   .edge, .bar-row { transition: none; }
   .edge[data-highlight="upstream"], .edge[data-highlight="downstream"] { animation: none; }
 }
+
+/* Labels (S6) */
+.label-key {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 12px; padding: 8px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.label-key-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-quiet); }
+.label-key ul { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0; padding: 0; list-style: none; }
+.label-key li { position: relative; display: flex; align-items: center; gap: 2px; }
+.label-toggle {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; font-size: 13px;
+}
+.label-toggle::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--label-colour); }
+.label-toggle[aria-pressed="true"] { border-color: var(--label-colour); box-shadow: inset 0 0 0 1px var(--label-colour); background: color-mix(in srgb, var(--label-colour) 14%, transparent); font-weight: 650; }
+.label-swatch {
+  width: 22px; height: 22px; padding: 0; border-radius: 6px; background: transparent; border: 1px solid transparent;
+  position: relative;
+}
+.label-swatch::after { content: "▾"; font-size: 11px; color: var(--ink-quiet); }
+.label-swatch:hover { border-color: var(--line); }
+.colour-popover {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; display: grid; grid-template-columns: repeat(4, 26px) ; gap: 6px;
+  padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
+}
+.colour-popover .preset { width: 26px; height: 26px; padding: 0; border-radius: 6px; }
+.colour-popover .preset[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.colour-popover input[type="color"] { grid-column: 1 / -1; width: 100%; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.label-chip {
+  font-size: 11px; font-weight: 600; padding: 0 7px; border-radius: 999px; color: var(--ink);
+  border: 1.5px solid var(--label-colour); background: color-mix(in srgb, var(--label-colour) 16%, var(--surface));
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.chips li { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; }
+.chip-remove { background: none; color: var(--ink-quiet); padding: 0 4px; font-size: 15px; line-height: 1; }
+.chip-remove:hover { color: var(--danger); }

@@ -13,8 +13,9 @@ import {
 import { readRecords, readTable, stringifyCsv } from "./csv.ts";
 
 /**
- * CSV store: a folder holding project.csv (one row of metadata), nodes.csv and
- * edges.csv. Multi-value cells (labels, links) are separated by semicolons.
+ * CSV store: a folder holding project.csv (one row of metadata), nodes.csv,
+ * edges.csv and labels.csv (label colours). Multi-value cells (labels, links)
+ * are separated by semicolons.
  */
 export type CsvDescriptor = { kind: "csv"; path: string };
 
@@ -25,7 +26,7 @@ export class CsvAdapterError extends Error {
   }
 }
 
-const FILES = { project: "project.csv", nodes: "nodes.csv", edges: "edges.csv" } as const;
+const FILES = { project: "project.csv", nodes: "nodes.csv", edges: "edges.csv", labels: "labels.csv" } as const;
 type FileTexts = Record<keyof typeof FILES, string>;
 
 const NODE_COLUMNS = ["id", "title", "work_time", "not_before", "labels", "description", "links"] as const;
@@ -47,6 +48,7 @@ async function readAll(folder: string): Promise<FileTexts> {
     project: await readText(folder, FILES.project, true),
     nodes: await readText(folder, FILES.nodes, true),
     edges: await readText(folder, FILES.edges, false),
+    labels: await readText(folder, FILES.labels, false),
   };
 }
 
@@ -57,6 +59,8 @@ function versionOf(texts: FileTexts): string {
     .update(texts.nodes)
     .update("\0")
     .update(texts.edges)
+    .update("\0")
+    .update(texts.labels)
     .digest("hex")
     .slice(0, 16);
 }
@@ -121,6 +125,16 @@ function parseProject(texts: FileTexts): Project {
     const rootId = meta.values.root_id ?? "";
     if (!seen.has(rootId)) throw new CsvAdapterError(`${FILES.project}: root_id "${rootId}" is not an id in ${FILES.nodes}`);
 
+    const labelColours: Record<string, string> = {};
+    if (texts.labels) {
+      for (const { line, values } of readRecords(texts.labels, FILES.labels, ["label", "colour"]).records) {
+        const colour = (values.colour ?? "").toLowerCase();
+        if (!values.label) continue;
+        if (!/^#[0-9a-f]{6}$/.test(colour)) throw new CsvAdapterError(`${FILES.labels} line ${line}: "${values.colour}" is not a #rrggbb colour`);
+        labelColours[values.label] = colour;
+      }
+    }
+
     return {
       id: meta.values.id ?? "",
       name: meta.values.name ?? "",
@@ -128,6 +142,7 @@ function parseProject(texts: FileTexts): Project {
       rootId,
       nodes,
       edges,
+      labelColours,
     };
   });
 }
@@ -176,6 +191,12 @@ function serialise(project: Project, previousNodes: string): FileTexts {
     ]),
     nodes: stringifyCsv([header, ...nodeRows]),
     edges: stringifyCsv([["dependent_id", "dependency_id"], ...project.edges.map((e) => [e.dependentId, e.dependencyId])]),
+    labels: stringifyCsv([
+      ["label", "colour"],
+      ...Object.entries(project.labelColours ?? {})
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([label, colour]) => [label, colour]),
+    ]),
   };
 }
 

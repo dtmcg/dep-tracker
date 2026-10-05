@@ -9,7 +9,8 @@ export type Command =
   | { type: "updateNode"; id: string; changes: NodeChanges }
   | { type: "removeNode"; id: string }
   | { type: "addEdge"; dependentId: string; dependencyId: string }
-  | { type: "removeEdge"; dependentId: string; dependencyId: string };
+  | { type: "removeEdge"; dependentId: string; dependencyId: string }
+  | { type: "setLabelColour"; label: string; colour: string | null };
 
 export class CommandError extends Error {
   constructor(message: string) {
@@ -34,7 +35,7 @@ function validNode(node: ProjectNode): ProjectNode {
     ...node,
     title,
     workTime: node.workTime.trim(),
-    labels: node.labels.map((l) => l.trim()).filter(Boolean),
+    labels: [...new Set(node.labels.map((l) => l.trim()).filter(Boolean))],
     links: node.links.map((l) => l.trim()).filter(Boolean),
   };
   if (clean.notBefore !== undefined) clean.notBefore = new Date(Date.parse(clean.notBefore)).toISOString();
@@ -86,6 +87,15 @@ function apply(project: Project, command: Command): Project {
       if (!project.edges.some((e) => sameEdge(e, edge))) throw new CommandError("There is no such dependency to remove");
       return { ...project, edges: project.edges.filter((e) => !sameEdge(e, edge)) };
     }
+    case "setLabelColour": {
+      const label = command.label.trim();
+      if (!label) throw new CommandError("A label needs a name");
+      const colours = { ...(project.labelColours ?? {}) };
+      if (command.colour === null) delete colours[label];
+      else if (/^#[0-9a-f]{6}$/i.test(command.colour)) colours[label] = command.colour.toLowerCase();
+      else throw new CommandError(`"${command.colour}" is not a colour; use #rrggbb`);
+      return { ...project, labelColours: colours };
+    }
     default:
       throw new CommandError(`Unknown command ${JSON.stringify((command as { type?: unknown }).type)}`);
   }
@@ -118,6 +128,8 @@ function inverseOf(before: Project, command: Command): Command[] {
       return [{ type: "removeEdge", dependentId: command.dependentId, dependencyId: command.dependencyId }];
     case "removeEdge":
       return [{ type: "addEdge", dependentId: command.dependentId, dependencyId: command.dependencyId }];
+    case "setLabelColour":
+      return [{ type: "setLabelColour", label: command.label, colour: before.labelColours?.[command.label.trim()] ?? null }];
   }
 }
 

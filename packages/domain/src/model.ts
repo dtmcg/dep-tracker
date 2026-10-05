@@ -25,6 +25,8 @@ export interface Project {
   rootId: string;
   nodes: ProjectNode[];
   edges: Dependency[];
+  /** Chosen colour per label, as #rrggbb (FR-20). Labels without one use a default. */
+  labelColours?: Record<string, string>;
 }
 
 /** Where a project is stored. More kinds arrive with later slices. */

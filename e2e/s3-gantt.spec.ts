@@ -121,4 +121,14 @@ test.describe("S3: graph-based Gantt", () => {
     await page.mouse.up();
     await expect(page.locator('[data-edge-dependency="Docs"][data-edge-dependent="Payments"]')).toHaveCount(1);
   });
+
+  test("clicking a bar anywhere, including its connector handle, selects the node", async ({ page }) => {
+    await page.getByRole("button", { name: "Close details" }).click();
+    const connector = bar(page, "Docs").getByTestId("connector");
+    await connector.scrollIntoViewIfNeeded();
+    await bar(page, "Docs").hover();
+    const handle = await box(connector);
+    await page.mouse.click(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await expect(page.getByRole("complementary", { name: "Details of Docs" })).toBeVisible();
+  });
 });

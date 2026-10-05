@@ -130,3 +130,29 @@ describe("invertCommands", () => {
     });
   }
 });
+
+describe("labels (S6)", () => {
+  it("sets, changes and clears a label colour", () => {
+    const set = applyCommands(base, [{ type: "setLabelColour", label: "risk", colour: "#CC0000" }]);
+    assert.deepEqual(set.labelColours, { risk: "#cc0000" });
+    const cleared = applyCommands(set, [{ type: "setLabelColour", label: "risk", colour: null }]);
+    assert.deepEqual(cleared.labelColours, {});
+  });
+
+  it("rejects a colour that is not #rrggbb", () => {
+    assert.throws(() => applyCommands(base, [{ type: "setLabelColour", label: "risk", colour: "red" }]), /colour/i);
+  });
+
+  it("undoes a colour change", () => {
+    const set = applyCommands(base, [{ type: "setLabelColour", label: "risk", colour: "#cc0000" }]);
+    const change = [{ type: "setLabelColour" as const, label: "risk", colour: "#00aa00" }];
+    const restored = applyCommands(applyCommands(set, change), invertCommands(set, change));
+    assert.deepEqual(restored.labelColours, { risk: "#cc0000" });
+  });
+
+  it("trims and de-duplicates a node's labels", () => {
+    const next = applyCommands(base, [{ type: "updateNode", id: "n01", changes: { labels: [" risk", "risk", "", "team:web "] } }]);
+    assert.deepEqual(next.nodes[0]?.labels, ["risk", "team:web"]);
+  });
+});
+
