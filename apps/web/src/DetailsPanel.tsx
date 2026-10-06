@@ -60,7 +60,7 @@ export function DetailsPanel({
               <>
                 <div>
                   <dt>Work time</dt>
-                  <dd data-testid="detail-work">{node.workTime}</dd>
+                  <dd data-testid="detail-work">{node.workTime || "Not set"}</dd>
                 </div>
                 <div>
                   <dt>Not before</dt>
@@ -77,6 +77,9 @@ export function DetailsPanel({
               <dd data-testid="detail-completion">{times ? formatDateTime(times.completion) : "Not scheduled"}</dd>
             </div>
           </dl>
+          {snapshot.schedule.flags[node.id]?.includes("unestimated") && (
+            <p className="hint">No work time yet, so this adds nothing to the dates of what depends on it. Enter one under Edit.</p>
+          )}
           {!times && <p className="warn">{snapshot.schedule.errors[node.id]}</p>}
           {snapshot.schedule.flags[node.id]?.includes("orphan") && (
             <p className="hint">Not linked to the success criteria: nothing on its path depends on this node.</p>
@@ -374,7 +377,7 @@ function AddDependencyForm({
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState("");
-  const [workTime, setWorkTime] = useState("1d");
+  const [workTime, setWorkTime] = useState("");
   const ids = { title: `dep-title-${dependent.id}`, work: `dep-work-${dependent.id}` };
   return (
     <form
@@ -394,7 +397,7 @@ function AddDependencyForm({
       </div>
       <div className="field narrow">
         <label htmlFor={ids.work}>Work time</label>
-        <input id={ids.work} type="text" value={workTime} onChange={(e) => setWorkTime(e.target.value)} required />
+        <input id={ids.work} type="text" value={workTime} onChange={(e) => setWorkTime(e.target.value)} placeholder="optional, e.g. 2d" />
       </div>
       <div className="actions">
         <button type="submit">Add</button>

@@ -190,6 +190,24 @@ describe("POST /api/projects (create)", () => {
   });
 });
 
+describe("POST /api/projects without a start or work time", () => {
+  it("starts the project now and leaves the root unestimated", async () => {
+    const before = Date.now();
+    const res = await post("/api/projects", { storage: { kind: "csv", path: await newFolder() }, name: "Quick", root: { title: "Done" } });
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    assert.ok(Math.abs(Date.parse(body.project.start) - before) < 60_000);
+    assert.equal(body.project.nodes[0].workTime, "");
+    assert.ok(body.schedule.nodes[body.project.rootId]);
+    assert.deepEqual(body.schedule.flags[body.project.rootId], ["unestimated"]);
+  });
+
+  it("still rejects a start that isn't a date", async () => {
+    const res = await post("/api/projects", { storage: { kind: "csv", path: await newFolder() }, name: "X", start: "someday", root: { title: "Done" } });
+    assert.equal(res.status, 422);
+  });
+});
+
 describe("POST /api/projects/:id/commands", () => {
   it("applies commands, saves, and returns the new schedule and version", async () => {
     const { body: opened } = await createProject(await newFolder());

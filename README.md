@@ -163,3 +163,7 @@ CSV projects default to `Documents/pdm_projects` in your home folder (`C:\Users\
 ## Your projects list
 
 The app remembers every project you create, open or import, and offers them in a "Your projects" drop-down on the Open project screen (most recent first; "Remove from list" forgets one without touching its files). The list is kept in `data/projects.json` next to the code (git-ignored) and you never need to edit it; if it goes missing the app simply starts with an empty list. Set `DEP_TRACKER_LIBRARY_FILE` to keep it elsewhere.
+
+## Optional work time and start
+
+"New project" asks only for where to keep it, a name and the success criteria; the project starts now. A node's work time is optional too: a node without one is shown dashed with a "no work time" badge, keeps its link, and adds nothing to the dates of what depends on it until you enter a work time. The Open project tab shows a "No projects yet" hint until you have created, opened or imported one.

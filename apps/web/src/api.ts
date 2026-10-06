@@ -19,8 +19,9 @@ export interface KnownProject {
 export interface NewProject {
   storage: StorageDescriptor;
   name: string;
-  start: string;
-  root: { title: string; workTime: string };
+  /** When the project starts; the server uses the current time if left out. */
+  start?: string;
+  root: { title: string; workTime?: string };
 }
 
 export class ApiError extends Error {

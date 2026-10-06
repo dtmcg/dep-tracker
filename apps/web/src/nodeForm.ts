@@ -59,7 +59,7 @@ export function formChanges(node: ProjectNode, form: NodeForm): { changes: NodeC
   } else {
     const workTime = form.workTime.trim();
     try {
-      parseDuration(workTime);
+      if (workTime) parseDuration(workTime); // optional: empty means not yet estimated
       if (workTime !== node.workTime) changes.workTime = workTime;
     } catch (error) {
       errors.workTime = (error as Error).message;

@@ -20,9 +20,7 @@ test("the default folder works end to end: create with no folder typed, then reo
   await page.goto("/");
   await page.getByRole("tab", { name: "New project" }).click();
   await page.getByLabel("Project name").fill("Default home");
-  await page.getByLabel("Start").fill("2026-11-02T09:00");
   await page.getByLabel("Success criteria").fill("Done");
-  await page.getByLabel("Work time").fill("1d");
   await page.getByRole("button", { name: "Create project" }).click();
   await expect(page.getByRole("heading", { name: "Default home" })).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();

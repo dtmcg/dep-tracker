@@ -320,3 +320,9 @@ input.mono { font-size: 13px; }
     linear-gradient(90deg, color-mix(in srgb, var(--line) 35%, transparent) 1px, transparent 1px);
   background-size: 24px 24px;
 }
+
+/* Nodes with no work time yet: shown, but they hold nothing up. */
+.bar-row[data-unestimated="true"] .bar { background: transparent; border: 1.5px dashed var(--ink-quiet); }
+.edge[data-unestimated="true"] { stroke-dasharray: 3 5; opacity: 0.55; }
+.unestimated-badge { color: var(--ink-quiet); border-color: var(--line); }
+.empty-open { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }

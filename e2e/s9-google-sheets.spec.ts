@@ -1,5 +1,5 @@
 import { expect, test } from "playwright/test";
-import { addDependency, bar } from "./helpers.ts";
+import { addDependency, bar, openFromList, showOpenForm } from "./helpers.ts";
 
 const GOOGLE = `http://127.0.0.1:${process.env.E2E_GOOGLE_PORT ?? 4319}`;
 const admin = async (path: string, init?: RequestInit) => (await fetch(`${GOOGLE}/__admin${path}`, init)).json();
@@ -12,6 +12,7 @@ const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/e
 test.describe.serial("S9: Google Sheets", () => {
   test("sign in with Google through the loopback redirect", async ({ page, context }) => {
     await page.goto("/");
+    await showOpenForm(page);
     await page.getByLabel("Store").selectOption("Google Sheet");
     const connect = page.getByRole("button", { name: "Connect Google account" });
     await expect(connect).toBeVisible();
@@ -28,9 +29,7 @@ test.describe.serial("S9: Google Sheets", () => {
     await expect(page.getByText("Connected to Google")).toBeVisible();
     await page.getByLabel("Spreadsheet link").fill(sheetUrl(id));
     await page.getByLabel("Project name").fill("Sheet plan");
-    await page.getByLabel("Start").fill("2026-11-02T09:00");
     await page.getByLabel("Success criteria").fill("Release");
-    await page.getByLabel("Work time").fill("2d");
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page.getByRole("heading", { name: "Sheet plan" })).toBeVisible();
 
@@ -62,6 +61,7 @@ test.describe.serial("S9: Google Sheets", () => {
       }),
     })) as { id: string };
     await page.goto("/");
+    await showOpenForm(page);
     await page.getByLabel("Store").selectOption("Google Sheet");
     await page.getByLabel("Spreadsheet link").fill(sheetUrl(id));
     await page.getByRole("button", { name: "Open" }).click();

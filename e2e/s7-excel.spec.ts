@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "playwright/test";
 import { readWorkbook } from "../packages/xlsx/src/index.ts";
-import { addDependency, bar } from "./helpers.ts";
+import { addDependency, bar, openFromList, showOpenForm } from "./helpers.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = async (name: string) => path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-e2e-")), name);
@@ -21,9 +21,7 @@ test.describe("S7: Excel workbooks", () => {
     await page.getByLabel("Store").selectOption("Excel workbook");
     await page.getByLabel("Workbook file").fill(file);
     await page.getByLabel("Project name").fill("Spreadsheet plan");
-    await page.getByLabel("Start").fill("2026-11-02T09:00");
     await page.getByLabel("Success criteria").fill("Release");
-    await page.getByLabel("Work time").fill("2d");
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page.getByRole("heading", { name: "Spreadsheet plan" })).toBeVisible();
 
@@ -55,6 +53,7 @@ test.describe("S7: Excel workbooks", () => {
     const file = await tmp("hand.xlsx");
     await copyFile(path.resolve(here, "../packages/adapter-excel/fixtures/hand-edited.xlsx"), file);
     await page.goto("/");
+    await showOpenForm(page);
     await page.getByLabel("Store").selectOption("Excel workbook");
     await page.getByLabel("Workbook file").fill(file);
     await page.getByRole("button", { name: "Open" }).click();
@@ -79,6 +78,7 @@ test.describe("S7: Excel workbooks", () => {
     await copyFile(path.resolve(here, "../packages/adapter-excel/fixtures/hand-edited.xlsx"), file);
     const folder = await tmp("exported");
     await page.goto("/");
+    await showOpenForm(page);
     await page.getByLabel("Store").selectOption("Excel workbook");
     await page.getByLabel("Workbook file").fill(file);
     await page.getByRole("button", { name: "Open" }).click();

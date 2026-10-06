@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "playwright/test";
+import { openFromList, showOpenForm } from "./helpers.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sampleProject = path.resolve(here, "../fixtures/sample-project");
@@ -9,6 +10,7 @@ const sampleProject = path.resolve(here, "../fixtures/sample-project");
 // the root title and completion = project start + work time.
 test("S0: open a CSV project and see its root node with its completion time", async ({ page }) => {
   await page.goto("/");
+  await showOpenForm(page);
 
   await page.getByLabel("Project folder").fill(sampleProject);
   await page.getByRole("button", { name: "Open" }).click();
@@ -25,6 +27,7 @@ test("S0: open a CSV project and see its root node with its completion time", as
 
 test("S0: opening a folder that is not a project shows a clear error", async ({ page }) => {
   await page.goto("/");
+  await showOpenForm(page);
 
   await page.getByLabel("Project folder").fill(path.resolve(here, "does-not-exist"));
   await page.getByRole("button", { name: "Open" }).click();

@@ -178,7 +178,9 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
   const location = typed ?? (kind === "csv" ? projectsFolderPrefix(projectsDir) : "");
   const setLocation = setTyped;
   // Projects created, opened or imported before, newest first (the server keeps this list itself).
-  const [known, setKnown] = useState<KnownProject[]>([]);
+  const [knownList, setKnown] = useState<KnownProject[] | null>(null); // null while loading
+  const known = knownList ?? [];
+  const [showManual, setShowManual] = useState(false);
   const [picked, setPicked] = useState("");
   useEffect(() => {
     api.library().then(setKnown, () => undefined);
@@ -193,6 +195,17 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
     }
   };
   const store = storeOf(kind);
+  if (knownList === null) return null;
+  if (known.length === 0 && !showManual) {
+    return (
+      <div className="empty-open">
+        <p className="hint">No projects yet. Create one, or import an existing plan.</p>
+        <button type="button" className="link-button" onClick={() => setShowManual(true)}>
+          Open one from a specific location…
+        </button>
+      </div>
+    );
+  }
   return (
     <form
       className="stack-form grid-form"
@@ -278,9 +291,7 @@ function NewForm({
   // CSV projects default to their own folder under the projects folder, following the name until edited.
   const location = typed ?? (kind === "csv" ? suggestFolder(projectsDir, name) : "");
   const setLocation = setTyped;
-  const [start, setStart] = useState("");
   const [rootTitle, setRootTitle] = useState("");
-  const [workTime, setWorkTime] = useState("1d");
   const locationLabel = kind === "csv" ? "Folder" : storeOf(kind).location;
 
   return (
@@ -291,8 +302,7 @@ function NewForm({
         onSubmit({
           storage: { kind, path: location },
           name,
-          start: new Date(start).toISOString(),
-          root: { title: rootTitle, workTime },
+          root: { title: rootTitle },
         });
       }}
     >
@@ -325,10 +335,6 @@ function NewForm({
         <input id="new-name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
       </div>
       <div className="field">
-        <label htmlFor="new-start">Start</label>
-        <input id="new-start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required />
-      </div>
-      <div className="field">
         <label htmlFor="new-root">Success criteria</label>
         <input
           id="new-root"
@@ -338,10 +344,6 @@ function NewForm({
           placeholder="What does done look like?"
           required
         />
-      </div>
-      <div className="field">
-        <label htmlFor="new-work">Work time</label>
-        <input id="new-work" type="text" value={workTime} onChange={(e) => setWorkTime(e.target.value)} required />
       </div>
       <div className="actions wide">
         <button type="submit" disabled={busy}>

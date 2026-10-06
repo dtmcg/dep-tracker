@@ -62,3 +62,20 @@ describe("criticalEdges", () => {
     assert.deepEqual([...criticalEdges(pinned, schedule(pinned), "r")], []);
   });
 });
+
+describe("criticalEdges with a node that has no work time", () => {
+  it("never calls the edge from an unestimated node critical", () => {
+    const p: Project = {
+      id: "x",
+      name: "X",
+      start: "2026-11-02T09:00:00.000Z",
+      rootId: "r",
+      nodes: [n("r", "2d"), n("a", "1d"), n("u", "")],
+      edges: [
+        { dependentId: "r", dependencyId: "a" },
+        { dependentId: "r", dependencyId: "u" },
+      ],
+    };
+    assert.deepEqual([...criticalEdges(p, schedule(p), "r")], ["a>r"]);
+  });
+});

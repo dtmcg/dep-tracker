@@ -1,5 +1,5 @@
 import { parseDuration } from "./duration.ts";
-import type { ExternalTime, NodeFlag, Project, Schedule } from "./model.ts";
+import type { ExternalTime, NodeFlag, Project, ProjectNode, Schedule } from "./model.ts";
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -90,6 +90,9 @@ function closedPath(start: string, members: Set<string>, deps: Map<string, strin
  * no usable answer is `unresolved` and blocks its dependents; one caught in a
  * loop of references between projects is `cyclic`, like a cycle inside this one.
  */
+/** A node with no work time yet: it is shown, but adds nothing to the dates of what depends on it. */
+const isUnestimated = (node: ProjectNode) => !node.ref && node.workTime.trim() === "";
+
 export function schedule(project: Project, externals: Record<string, ExternalTime> = {}): Schedule {
   const ids = project.nodes.map((n) => n.id).sort(byId);
   const nodeOf = new Map(project.nodes.map((n) => [n.id, n]));
@@ -180,6 +183,7 @@ export function schedule(project: Project, externals: Record<string, ExternalTim
       result.errors[id] = `Waiting on "${waitingOnReference.get(id)}", a reference that can't be resolved`;
     }
     if (!reachable.has(id)) flag(id, "orphan");
+    if (isUnestimated(nodeOf.get(id)!)) flag(id, "unestimated");
   }
 
   // Time everything else. No cycles remain among these nodes.
@@ -204,6 +208,7 @@ export function schedule(project: Project, externals: Record<string, ExternalTim
     let waitingOn: string | undefined;
     for (const depId of deps.get(id)!) {
       const done = visit(depId);
+      if (isUnestimated(nodeOf.get(depId)!)) continue; // keeps its own placeholder date, but doesn't hold anything up
       if (done === null) waitingOn ??= titleOf(depId);
       else dependencyTime = Math.max(dependencyTime ?? -Infinity, done);
     }
@@ -219,7 +224,7 @@ export function schedule(project: Project, externals: Record<string, ExternalTim
       result.errors[id] = `Waiting on "${waitingOn}", which cannot be scheduled`;
     } else {
       try {
-        value = ready + parseDuration(node.workTime);
+        value = ready + (isUnestimated(node) ? 0 : parseDuration(node.workTime));
         result.nodes[id] = { start: new Date(ready).toISOString(), completion: new Date(value).toISOString() };
         if (dependencyTime !== undefined) result.nodes[id].dependencyTime = new Date(dependencyTime).toISOString();
       } catch (error) {

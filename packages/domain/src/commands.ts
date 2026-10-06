@@ -46,7 +46,8 @@ function validNode(node: ProjectNode): ProjectNode {
     node = validReference(node);
   } else {
     try {
-      parseDuration(node.workTime);
+      // A work time is optional; a node without one is simply not yet estimated.
+      if (node.workTime.trim()) parseDuration(node.workTime);
     } catch (error) {
       throw new CommandError((error as Error).message);
     }

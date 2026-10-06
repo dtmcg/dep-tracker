@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "playwright/test";
-import { addDependency, bar, details, newProject } from "./helpers.ts";
+import { addDependency, bar, details, newProject, openFromList, showOpenForm } from "./helpers.ts";
 
 // Slice S4 acceptance: creating A→B→A marks both cyclic, marks their dependents
 // blocked and leaves unrelated nodes dated; the banner lists the cycle; removing
@@ -49,6 +49,7 @@ test("S4: a node that depends on itself (from a hand-edited file) is flagged as 
   await writeFile(path.join(folder, "nodes.csv"), "id,title,work_time\nr,Release,2d\nl,Loop,1d\n");
   await writeFile(path.join(folder, "edges.csv"), "dependent_id,dependency_id\nr,l\nl,l\n");
   await page.goto("/");
+  await showOpenForm(page);
   await page.getByLabel("Project folder").fill(folder);
   await page.getByRole("button", { name: "Open" }).click();
   await expect(bar(page, "Loop")).toHaveAttribute("data-state", "cyclic");

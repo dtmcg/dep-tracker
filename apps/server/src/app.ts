@@ -168,9 +168,10 @@ export function createApp(options: AppOptions): Server {
       const descriptor = parseDescriptor(body.storage);
       const adapter = adapterFor(descriptor);
       const root = (body.root ?? {}) as { title?: unknown; workTime?: unknown };
-      const start = typeof body.start === "string" ? Date.parse(body.start) : NaN;
+      // The start is optional: a new project starts now.
+      const start = body.start === undefined ? Date.now() : typeof body.start === "string" ? Date.parse(body.start) : NaN;
       if (typeof body.name !== "string" || !body.name.trim()) throw new HttpError(422, "A project needs a name");
-      if (Number.isNaN(start)) throw new HttpError(422, "A project needs a valid start date-time");
+      if (Number.isNaN(start)) throw new HttpError(422, "The start must be a valid date-time");
       const rootId = newId();
       let project: Project = {
         id: newId().replace(/^n/, "p"),

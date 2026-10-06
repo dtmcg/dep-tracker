@@ -39,6 +39,7 @@ export function criticalEdges(project: Project, sched: Schedule, id: string): Se
     if (!times?.dependencyTime || times.start !== times.dependencyTime) continue;
     for (const e of project.edges) {
       if (e.dependentId !== node) continue;
+      if (sched.flags[e.dependencyId]?.includes("unestimated")) continue; // holds nothing up
       if (sched.nodes[e.dependencyId]?.completion === times.dependencyTime) {
         edges.add(`${e.dependencyId}>${node}`);
         stack.push(e.dependencyId);

@@ -261,6 +261,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                 data-edge-dependency={titleOf.get(e.dependencyId)}
                 data-edge-dependent={titleOf.get(e.dependentId)}
                 className={isCyclic(e.dependencyId) && isCyclic(e.dependentId) ? "edge cyclic" : "edge"}
+                data-unestimated={schedule.flags[e.dependencyId]?.includes("unestimated") ? "true" : undefined}
                 d={roundedPath(e.points)}
                 markerEnd={`url(#arrow${highlight === "upstream" ? "-up" : highlight === "downstream" ? "-down" : ""})`}
               />
@@ -286,6 +287,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                 data-labels-active={on.length ? on.join(" ") : undefined}
                 data-timed={b.timed}
                 data-reference={node.ref ? "true" : undefined}
+                data-unestimated={schedule.flags[b.id]?.includes("unestimated") ? "true" : undefined}
                 data-state={stateOf(b.id)}
                 data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}
                 className="bar-row"
@@ -323,6 +325,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                       </span>
                     )}
                     {node.ref && <span className="bar-badge reference-badge">other project</span>}
+                    {schedule.flags[b.id]?.includes("unestimated") && <span className="bar-badge unestimated-badge">no work time</span>}
                     {schedule.flags[b.id]?.includes("orphan") && <span className="bar-badge">not linked to the success criteria</span>}
                     {on.map((label) => (
                       <span

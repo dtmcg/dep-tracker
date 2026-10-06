@@ -47,6 +47,19 @@ describe("node form", () => {
   });
 });
 
+describe("node form without a work time", () => {
+  it("accepts an empty work time and clears it", () => {
+    const { changes, errors } = formChanges(node, { ...toForm(node), workTime: "  " });
+    assert.deepEqual(errors, {});
+    assert.deepEqual(changes, { workTime: "" });
+  });
+
+  it("does not report a change when it was already empty", () => {
+    const blank = { ...node, workTime: "" };
+    assert.deepEqual(formChanges(blank, toForm(blank)).changes, {});
+  });
+});
+
 describe("node form for a reference", () => {
   const ref: ProjectNode = {
     id: "n05",

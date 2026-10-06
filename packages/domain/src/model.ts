@@ -95,7 +95,7 @@ export interface NodeTimes {
  * depends, directly or not, on an unresolved reference. orphan: not reachable
  * from the success criteria.
  */
-export type NodeFlag = "cyclic" | "blockedByCycle" | "unresolved" | "blockedByReference" | "orphan";
+export type NodeFlag = "cyclic" | "blockedByCycle" | "unresolved" | "blockedByReference" | "orphan" | "unestimated";
 
 /**
  * What the server learned about another project for a reference node: its

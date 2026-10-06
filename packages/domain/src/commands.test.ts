@@ -34,6 +34,13 @@ describe("applyCommands", () => {
     assert.throws(() => applyCommands(base, [{ type: "addNode", node: { ...node("n02"), workTime: "later" } }]), /"later"/);
   });
 
+  it("accepts a node with no work time, and lets one be cleared", () => {
+    const next = applyCommands(base, [{ type: "addNode", node: { ...node("n02", "Sketch"), workTime: "  " } }]);
+    assert.equal(next.nodes[1]!.workTime, "");
+    const cleared = applyCommands(base, [{ type: "updateNode", id: "n01", changes: { workTime: "" } }]);
+    assert.equal(cleared.nodes[0]!.workTime, "");
+  });
+
   it("rejects an edge to a missing node", () => {
     assert.throws(
       () => applyCommands(base, [{ type: "addEdge", dependentId: "n01", dependencyId: "n99" }]),
