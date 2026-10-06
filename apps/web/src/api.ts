@@ -49,6 +49,7 @@ export function createApi(token: string, fetchFn: typeof fetch = (...args) => fe
   const projectUrl = (id: string) => `/api/projects/${encodeURIComponent(id)}`;
 
   return {
+    config: () => request<{ projectsDir: string }>("/api/config"),
     openProject: (storage: StorageDescriptor) => post<OpenedProject>("/api/projects/open", { storage }),
     createProject: (input: NewProject) => post<OpenedProject>("/api/projects", input),
     getProject: (id: string) => request<OpenedProject>(projectUrl(id)),

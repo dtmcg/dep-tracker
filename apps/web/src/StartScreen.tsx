@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import type { StorageDescriptor } from "@dep-tracker/domain";
 import type { Api, OpenedProject } from "./api.ts";
+import { projectsFolderPrefix, suggestFolder } from "./folders.ts";
 
 type Tab = "open" | "new" | "import";
 type Kind = StorageDescriptor["kind"];
@@ -44,6 +45,11 @@ export function StartScreen({ api, onOpened }: { api: Api; onOpened: (project: O
   const [tab, setTab] = useState<Tab>("open");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Where CSV projects go by default, e.g. ~/Documents/pdm_projects; "" until the server says.
+  const [projectsDir, setProjectsDir] = useState("");
+  useEffect(() => {
+    api.config().then((c) => setProjectsDir(c.projectsDir), () => undefined);
+  }, [api]);
 
   async function run(action: () => Promise<OpenedProject>) {
     setBusy(true);
@@ -79,8 +85,8 @@ export function StartScreen({ api, onOpened }: { api: Api; onOpened: (project: O
       </div>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="panel">
-        {tab === "open" && <OpenForm api={api} busy={busy} onSubmit={(storage) => run(() => api.openProject(storage))} />}
-        {tab === "new" && <NewForm api={api} busy={busy} onSubmit={(input) => run(() => api.createProject(input))} />}
+        {tab === "open" && <OpenForm api={api} projectsDir={projectsDir} busy={busy} onSubmit={(storage) => run(() => api.openProject(storage))} />}
+        {tab === "new" && <NewForm api={api} projectsDir={projectsDir} busy={busy} onSubmit={(input) => run(() => api.createProject(input))} />}
         {tab === "import" && <ImportForm api={api} busy={busy} onSubmit={(source, target) => run(() => api.importProject(source, target))} />}
       </div>
 
@@ -166,9 +172,11 @@ function GoogleConnect({ api }: { api: Api }) {
   );
 }
 
-function OpenForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: (storage: StorageDescriptor) => void }) {
+function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir: string; busy: boolean; onSubmit: (storage: StorageDescriptor) => void }) {
   const [kind, setKind] = useState<Kind>("csv");
-  const [location, setLocation] = useState("");
+  const [typed, setTyped] = useState<string | null>(null); // null until the person edits the field
+  const location = typed ?? (kind === "csv" ? projectsFolderPrefix(projectsDir) : "");
+  const setLocation = setTyped;
   const store = storeOf(kind);
   return (
     <form
@@ -178,7 +186,7 @@ function OpenForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: 
         onSubmit({ kind, path: location });
       }}
     >
-      <StoreSelect id="open-store" label="Store" value={kind} onChange={setKind} />
+      <StoreSelect id="open-store" label="Store" value={kind} onChange={(k) => { setKind(k); setTyped(null); }} />
       {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="open-location">{store.location}</label>
@@ -203,10 +211,23 @@ function OpenForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: 
   );
 }
 
-function NewForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: (input: Parameters<Api["createProject"]>[0]) => void }) {
+function NewForm({
+  api,
+  projectsDir,
+  busy,
+  onSubmit,
+}: {
+  api: Api;
+  projectsDir: string;
+  busy: boolean;
+  onSubmit: (input: Parameters<Api["createProject"]>[0]) => void;
+}) {
   const [kind, setKind] = useState<Kind>("csv");
-  const [location, setLocation] = useState("");
+  const [typed, setTyped] = useState<string | null>(null); // null until the person edits the field
   const [name, setName] = useState("");
+  // CSV projects default to their own folder under the projects folder, following the name until edited.
+  const location = typed ?? (kind === "csv" ? suggestFolder(projectsDir, name) : "");
+  const setLocation = setTyped;
   const [start, setStart] = useState("");
   const [rootTitle, setRootTitle] = useState("");
   const [workTime, setWorkTime] = useState("1d");
@@ -225,7 +246,7 @@ function NewForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: (
         });
       }}
     >
-      <StoreSelect id="new-store" label="Store" value={kind} onChange={setKind} />
+      <StoreSelect id="new-store" label="Store" value={kind} onChange={(k) => { setKind(k); setTyped(null); }} />
       {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="new-location">{locationLabel}</label>
@@ -244,7 +265,9 @@ function NewForm({ api, busy, onSubmit }: { api: Api; busy: boolean; onSubmit: (
             ? "A new .xlsx file; it must not exist yet."
             : kind === "gsheets"
               ? "A blank Google Sheet you can edit (create one at sheets.new)."
-              : "Created if it doesn't exist. Must not already hold a project."}
+              : kind === "csv" && projectsDir
+                ? "Created if it doesn't exist. Defaults to a folder named after the project, inside your projects folder."
+                : "Created if it doesn't exist. Must not already hold a project."}
         </p>
       </div>
       <div className="field">

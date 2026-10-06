@@ -40,6 +40,7 @@ export default defineConfig({
         DEP_TRACKER_GOOGLE_OAUTH_URL: google,
         DEP_TRACKER_GOOGLE_SHEETS_URL: google,
         DEP_TRACKER_CONFIG_DIR: configDir,
+        DEP_TRACKER_PROJECTS_DIR: path.join(configDir, "pdm_projects"),
       },
       reuseExistingServer: false,
       timeout: 60_000,

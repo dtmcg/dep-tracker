@@ -33,6 +33,8 @@ export interface AppOptions {
   token: string;
   /** Google sign-in for Sheets (S9). */
   google?: GoogleSignIn;
+  /** Default folder for CSV projects, offered by the start screen. */
+  projectsDir?: string;
 }
 
 export const TOKEN_HEADER = "x-dep-tracker-token";
@@ -123,6 +125,8 @@ export function createApp(options: AppOptions): Server {
     // Google redirects the browser here; it can't carry our token, so the one-time OAuth state guards it.
     if (route === "GET /api/auth/google/callback") return googleCallback(res, url);
     if (req.headers[TOKEN_HEADER] !== options.token) throw new HttpError(401, "Missing or wrong API token");
+
+    if (route === "GET /api/config") return sendJson(res, 200, { projectsDir: options.projectsDir ?? "" });
 
     if (route === "GET /api/auth/google/status") {
       return sendJson(res, 200, options.google ? await options.google.status() : { configured: false, connected: false });

@@ -7,6 +7,7 @@ import { excelAdapter } from "@dep-tracker/adapter-excel";
 import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTokenStore } from "@dep-tracker/adapter-gsheets";
 import { obsidianAdapter } from "@dep-tracker/adapter-obsidian";
 import { createApp } from "./app.ts";
+import { defaultProjectsDir } from "./config.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT ?? 4317);
@@ -30,6 +31,7 @@ const gsheets = createGoogleSheetsAdapter(
 const server = createApp({
   adapters: { csv: csvAdapter, excel: excelAdapter, obsidian: obsidianAdapter, gsheets },
   google,
+  projectsDir: defaultProjectsDir(homedir(), process.platform, process.env.DEP_TRACKER_PROJECTS_DIR),
   staticDir: path.resolve(here, "../../web/dist"),
   token,
 });

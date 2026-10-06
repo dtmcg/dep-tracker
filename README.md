@@ -155,3 +155,7 @@ The server binds to 127.0.0.1 only and generates a per-launch token, which it wr
 ## Referencing another project
 
 A node can stand in for another project's success criteria ("Add reference to another project" in the node details). Its completion comes from that project; its own work time and not-before date are ignored. In the files it is a single `reference` value written as `kind:path`, e.g. `csv:C:\plans\partner`, `excel:/home/me/partner.xlsx`, `obsidian:/vault/partner`, `gsheets:<sheet id>`. Edit it by hand if you like. A reference that can't be read is flagged "unresolved" and blocks what depends on it; projects that reference each other in a loop are reported and not timed.
+
+## Where projects are kept
+
+CSV projects default to `Documents/pdm_projects` in your home folder (`C:\Users\you\Documents\pdm_projects` on Windows, `/Users/you/Documents/pdm_projects` on macOS). The start screen pre-fills it: "New project" suggests `pdm_projects/<project name>`, and "Open project" starts with the folder path ready for you to add the project's name. You can type any other location. Set `DEP_TRACKER_PROJECTS_DIR` to change the default.

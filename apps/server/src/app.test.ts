@@ -33,7 +33,7 @@ before(async () => {
   staticDir = await mkdtemp(path.join(tmpdir(), "dep-tracker-web-"));
   await writeFile(path.join(staticDir, "index.html"), "<!doctype html><head><title>dep-tracker</title></head><body></body>");
   await writeFile(path.join(staticDir, "app.js"), "console.log('hi')");
-  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter, gsheets }, staticDir, token: TOKEN, google });
+  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter, gsheets }, staticDir, token: TOKEN, google, projectsDir: "/home/me/Documents/pdm_projects" });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => new Promise((resolve) => server.close(() => resolve()));
@@ -61,6 +61,18 @@ async function createProject(folder: string) {
   });
   return { res, body: await res.json() };
 }
+
+describe("GET /api/config", () => {
+  it("tells the web app the default projects folder", async () => {
+    const res = await get("/api/config");
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { projectsDir: "/home/me/Documents/pdm_projects" });
+  });
+
+  it("needs the token like any other call", async () => {
+    assert.equal((await fetch(`${base}/api/config`)).status, 401);
+  });
+});
 
 describe("API token (NFR-5)", () => {
   it("rejects API calls without the per-launch token", async () => {
