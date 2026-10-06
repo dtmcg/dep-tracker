@@ -4,3 +4,4 @@ apps/web/dist/
 test-results/
 playwright-report/
 *.bak
+data/

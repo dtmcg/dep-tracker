@@ -41,6 +41,7 @@ export default defineConfig({
         DEP_TRACKER_GOOGLE_SHEETS_URL: google,
         DEP_TRACKER_CONFIG_DIR: configDir,
         DEP_TRACKER_PROJECTS_DIR: path.join(configDir, "pdm_projects"),
+        DEP_TRACKER_LIBRARY_FILE: path.join(configDir, "library", "projects.json"),
       },
       reuseExistingServer: false,
       timeout: 60_000,

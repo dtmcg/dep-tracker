@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import type { StorageDescriptor } from "@dep-tracker/domain";
-import type { Api, OpenedProject } from "./api.ts";
+import type { Api, KnownProject, OpenedProject } from "./api.ts";
 import { projectsFolderPrefix, suggestFolder } from "./folders.ts";
 
 type Tab = "open" | "new" | "import";
@@ -177,6 +177,21 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
   const [typed, setTyped] = useState<string | null>(null); // null until the person edits the field
   const location = typed ?? (kind === "csv" ? projectsFolderPrefix(projectsDir) : "");
   const setLocation = setTyped;
+  // Projects created, opened or imported before, newest first (the server keeps this list itself).
+  const [known, setKnown] = useState<KnownProject[]>([]);
+  const [picked, setPicked] = useState("");
+  useEffect(() => {
+    api.library().then(setKnown, () => undefined);
+  }, [api]);
+  const keyOf = (p: KnownProject) => `${p.storage.kind}:${p.storage.path}`;
+  const choose = (key: string) => {
+    setPicked(key);
+    const project = known.find((p) => keyOf(p) === key);
+    if (project) {
+      setKind(project.storage.kind);
+      setTyped(project.storage.path);
+    }
+  };
   const store = storeOf(kind);
   return (
     <form
@@ -186,7 +201,39 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
         onSubmit({ kind, path: location });
       }}
     >
-      <StoreSelect id="open-store" label="Store" value={kind} onChange={(k) => { setKind(k); setTyped(null); }} />
+      {known.length > 0 && (
+        <div className="field wide">
+          <label htmlFor="open-known">Your projects</label>
+          <div className="row">
+            <select id="open-known" value={picked} onChange={(e) => choose(e.target.value)}>
+              <option value="">Choose a project…</option>
+              {known.map((p) => (
+                <option key={keyOf(p)} value={keyOf(p)}>
+                  {p.name} — {storeOf(p.storage.kind).name}: {p.storage.path}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="ghost small"
+              disabled={!picked}
+              title="Forget this project in the list. Its files are left alone."
+              onClick={() => {
+                const project = known.find((p) => keyOf(p) === picked);
+                if (!project) return;
+                api.forgetProject(project.storage).then(() => {
+                  setKnown((list) => list.filter((p) => keyOf(p) !== picked));
+                  setPicked("");
+                });
+              }}
+            >
+              Remove from list
+            </button>
+          </div>
+          <p className="hint">Or open something else below.</p>
+        </div>
+      )}
+      <StoreSelect id="open-store" label="Store" value={kind} onChange={(k) => { setKind(k); setTyped(null); setPicked(""); }} />
       {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="open-location">{store.location}</label>
@@ -196,7 +243,10 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
             className="mono"
             type="text"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              setPicked("");
+            }}
             placeholder={store.placeholder}
             spellCheck={false}
             required

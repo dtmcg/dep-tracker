@@ -9,6 +9,13 @@ export interface OpenedProject extends LoadedProject {
   referencesVersion?: string;
 }
 
+/** A project this app has created, opened or imported before. */
+export interface KnownProject {
+  name: string;
+  storage: StorageDescriptor;
+  lastOpened: string;
+}
+
 export interface NewProject {
   storage: StorageDescriptor;
   name: string;
@@ -49,6 +56,8 @@ export function createApi(token: string, fetchFn: typeof fetch = (...args) => fe
   const projectUrl = (id: string) => `/api/projects/${encodeURIComponent(id)}`;
 
   return {
+    library: async () => (await request<{ projects: KnownProject[] }>("/api/library")).projects,
+    forgetProject: (storage: StorageDescriptor) => post<{ ok: boolean }>("/api/library/forget", { storage }),
     config: () => request<{ projectsDir: string }>("/api/config"),
     openProject: (storage: StorageDescriptor) => post<OpenedProject>("/api/projects/open", { storage }),
     createProject: (input: NewProject) => post<OpenedProject>("/api/projects", input),

@@ -10,6 +10,7 @@ import { excelAdapter } from "@dep-tracker/adapter-excel";
 import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTokenStore } from "@dep-tracker/adapter-gsheets";
 import { type FakeGoogle, startFakeGoogle } from "@dep-tracker/adapter-gsheets/fake";
 import { createApp } from "./app.ts";
+import { createLibrary } from "./library.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sample = path.resolve(here, "../../../fixtures/sample-project");
@@ -19,6 +20,7 @@ let base = "";
 let close: () => Promise<void>;
 let staticDir = "";
 let fake: FakeGoogle;
+let library: ReturnType<typeof createLibrary>;
 
 before(async () => {
   fake = await startFakeGoogle({ clientId: "cid", clientSecret: "secret" });
@@ -30,10 +32,11 @@ before(async () => {
     store: fileTokenStore(path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-cfg-")), "google.json")),
   });
   const gsheets = createGoogleSheetsAdapter(createSheetsClient({ baseUrl: fake.url, accessToken: () => google.accessToken() }));
+  library = createLibrary(path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-library-")), "projects.json"));
   staticDir = await mkdtemp(path.join(tmpdir(), "dep-tracker-web-"));
   await writeFile(path.join(staticDir, "index.html"), "<!doctype html><head><title>dep-tracker</title></head><body></body>");
   await writeFile(path.join(staticDir, "app.js"), "console.log('hi')");
-  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter, gsheets }, staticDir, token: TOKEN, google, projectsDir: "/home/me/Documents/pdm_projects" });
+  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter, gsheets }, staticDir, token: TOKEN, google, projectsDir: "/home/me/Documents/pdm_projects", library });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => new Promise((resolve) => server.close(() => resolve()));
@@ -61,6 +64,42 @@ async function createProject(folder: string) {
   });
   return { res, body: await res.json() };
 }
+
+describe("known projects (GET /api/library)", () => {
+  const known = async () => ((await (await get("/api/library")).json()) as { projects: { name: string; storage: { kind: string; path: string } }[] }).projects;
+
+  it("remembers projects that are created, opened and imported", async () => {
+    const created = await newFolder();
+    await createProject(created);
+    assert.ok((await known()).some((p) => p.storage.path === created && p.name === "Launch"));
+
+    const opened = await post("/api/projects/open", { storage: { kind: "csv", path: sample } });
+    assert.equal(opened.status, 200);
+    assert.ok((await known()).some((p) => p.storage.path === sample && p.name === "Mobile relaunch"));
+
+    const target = await newFolder();
+    await post("/api/projects/import", { source: { kind: "csv", path: sample }, target: { kind: "csv", path: target } });
+    assert.ok((await known()).some((p) => p.storage.path === target));
+  });
+
+  it("does not remember a project that failed to open", async () => {
+    const missing = path.join(here, "never-there");
+    await post("/api/projects/open", { storage: { kind: "csv", path: missing } });
+    assert.ok(!(await known()).some((p) => p.storage.path === missing));
+  });
+
+  it("forgets a project on request, leaving its files alone", async () => {
+    const folder = await newFolder();
+    await createProject(folder);
+    assert.equal((await post("/api/library/forget", { storage: { kind: "csv", path: folder } })).status, 200);
+    assert.ok(!(await known()).some((p) => p.storage.path === folder));
+    assert.equal((await post("/api/projects/open", { storage: { kind: "csv", path: folder } })).status, 200);
+  });
+
+  it("needs the token", async () => {
+    assert.equal((await fetch(`${base}/api/library`)).status, 401);
+  });
+});
 
 describe("GET /api/config", () => {
   it("tells the web app the default projects folder", async () => {

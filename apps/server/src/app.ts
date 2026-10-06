@@ -14,6 +14,7 @@ import {
   type StorageDescriptor,
   VersionConflictError,
 } from "@dep-tracker/domain";
+import type { Library } from "./library.ts";
 import { resolveReferences } from "./references.ts";
 
 /** Google sign-in, as provided by @dep-tracker/adapter-gsheets. */
@@ -35,6 +36,8 @@ export interface AppOptions {
   google?: GoogleSignIn;
   /** Default folder for CSV projects, offered by the start screen. */
   projectsDir?: string;
+  /** The app's own list of known projects, for the "Open project" list. */
+  library?: Library;
 }
 
 export const TOKEN_HEADER = "x-dep-tracker-token";
@@ -126,6 +129,12 @@ export function createApp(options: AppOptions): Server {
     if (route === "GET /api/auth/google/callback") return googleCallback(res, url);
     if (req.headers[TOKEN_HEADER] !== options.token) throw new HttpError(401, "Missing or wrong API token");
 
+    if (route === "GET /api/library") return sendJson(res, 200, { projects: (await options.library?.list()) ?? [] });
+    if (route === "POST /api/library/forget") {
+      await options.library?.forget(parseDescriptor((await readJson(req)).storage));
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (route === "GET /api/config") return sendJson(res, 200, { projectsDir: options.projectsDir ?? "" });
 
     if (route === "GET /api/auth/google/status") {
@@ -150,6 +159,7 @@ export function createApp(options: AppOptions): Server {
       const descriptor = parseDescriptor((await readJson(req)).storage);
       const adapter = adapterFor(descriptor);
       const loaded = await adapter.load(descriptor).catch((e) => Promise.reject(toHttp(e)));
+      await options.library?.record(descriptor, loaded.project.name);
       return sendJson(res, 200, await opened(descriptor, loaded));
     }
 
@@ -178,6 +188,7 @@ export function createApp(options: AppOptions): Server {
           },
         ]);
         const version = await adapter.create(descriptor, project);
+        await options.library?.record(descriptor, project.name);
         return sendJson(res, 201, await opened(descriptor, { project, version }));
       } catch (error) {
         throw toHttp(error);
@@ -191,6 +202,7 @@ export function createApp(options: AppOptions): Server {
       try {
         const { project } = await adapterFor(source).load(source);
         const version = await adapterFor(target).create(target, project);
+        await options.library?.record(target, project.name);
         return sendJson(res, 201, await opened(target, { project, version }));
       } catch (error) {
         throw toHttp(error);

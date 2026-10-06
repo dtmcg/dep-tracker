@@ -159,3 +159,7 @@ A node can stand in for another project's success criteria ("Add reference to an
 ## Where projects are kept
 
 CSV projects default to `Documents/pdm_projects` in your home folder (`C:\Users\you\Documents\pdm_projects` on Windows, `/Users/you/Documents/pdm_projects` on macOS). The start screen pre-fills it: "New project" suggests `pdm_projects/<project name>`, and "Open project" starts with the folder path ready for you to add the project's name. You can type any other location. Set `DEP_TRACKER_PROJECTS_DIR` to change the default.
+
+## Your projects list
+
+The app remembers every project you create, open or import, and offers them in a "Your projects" drop-down on the Open project screen (most recent first; "Remove from list" forgets one without touching its files). The list is kept in `data/projects.json` next to the code (git-ignored) and you never need to edit it; if it goes missing the app simply starts with an empty list. Set `DEP_TRACKER_LIBRARY_FILE` to keep it elsewhere.

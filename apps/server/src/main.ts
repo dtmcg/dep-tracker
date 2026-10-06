@@ -8,6 +8,7 @@ import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTo
 import { obsidianAdapter } from "@dep-tracker/adapter-obsidian";
 import { createApp } from "./app.ts";
 import { defaultProjectsDir } from "./config.ts";
+import { createLibrary } from "./library.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT ?? 4317);
@@ -31,6 +32,8 @@ const gsheets = createGoogleSheetsAdapter(
 const server = createApp({
   adapters: { csv: csvAdapter, excel: excelAdapter, obsidian: obsidianAdapter, gsheets },
   google,
+  // The app's list of known projects lives with the code (data/ is git-ignored); nobody needs to edit it.
+  library: createLibrary(process.env.DEP_TRACKER_LIBRARY_FILE ?? path.resolve(here, "../../../data/projects.json")),
   projectsDir: defaultProjectsDir(homedir(), process.platform, process.env.DEP_TRACKER_PROJECTS_DIR),
   staticDir: path.resolve(here, "../../web/dist"),
   token,
