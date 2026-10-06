@@ -19,7 +19,7 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S8 Obsidian adapter | One note per task in a vault folder, wikilink dependencies, tags for labels | Done |
 | S9 Google Sheets adapter | Sign in with Google, then create in, open and edit Google Sheets; outside edits picked up within seconds | Done |
 | S10 Cross-project references | Reference another project's root; its date flows in, unreadable or looping references are flagged, edits to the other project are picked up | Done |
-| S11 UI styles | Four switchable styles | Planned |
+| S11 UI styles | Light, Dark, High contrast and Blueprint styles, switchable from the header and remembered; follows your system until you choose | Done |
 
 ## Getting started
 

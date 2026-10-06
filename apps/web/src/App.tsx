@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createApi, type OpenedProject, pageToken } from "./api.ts";
 import { ProjectView } from "./ProjectView.tsx";
+import { ThemePicker } from "./ThemePicker.tsx";
 import { StartScreen } from "./StartScreen.tsx";
 import { useProjectSession } from "./useProjectSession.ts";
 
@@ -12,6 +13,7 @@ export function App() {
     <main className="shell">
       <div className="brand">
         <strong>dep-tracker</strong> Project dependency manager
+        <ThemePicker />
       </div>
       {opened ? (
         <OpenProject key={opened.project.id} api={api} opened={opened} onClose={() => setOpened(null)} onOpened={setOpened} />
