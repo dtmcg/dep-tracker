@@ -7,6 +7,8 @@ export const ROW_HEIGHT = 40;
 export const BAR_HEIGHT = 26;
 const PAD_MS = DAY_MS / 2;
 const EDGE_STUB = 8;
+/** Bars may touch end to start on a row (a dependency feeding straight into its dependent); the first one's label is shortened to fit. */
+const TOUCH_TOLERANCE = 0.5;
 
 export const ZOOM_LEVELS = [
   { name: "Hours", pxPerDay: 960 },
@@ -23,6 +25,8 @@ export interface Bar {
   width: number;
   /** False for nodes that could not be scheduled; they sit in the bottom band. */
   timed: boolean;
+  /** Width available for the label to the right of the bar before the next bar on its row; null if unlimited. */
+  labelMax: number | null;
 }
 
 export interface Edge {
@@ -58,25 +62,12 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
     deps.get(e.dependentId)?.push(e.dependencyId);
     hasDependent.add(e.dependencyId);
   }
-  // Visit dependencies in time order so chains cascade down and to the right.
+  // Visit dependencies in time order so the same project always lays out the same way.
   const visitOrder = (list: string[]) =>
     [...list].sort((a, b) => (timed(a) && timed(b) ? startOf(a) - startOf(b) || byId(a, b) : timed(a) ? -1 : timed(b) ? 1 : byId(a, b)));
 
-  // Rows: dependencies before their dependents (post-order from the root), then the rest.
-  const order: string[] = [];
-  const seen = new Set<string>();
-  const visit = (id: string) => {
-    if (seen.has(id) || !deps.has(id)) return;
-    seen.add(id);
-    for (const d of visitOrder(deps.get(id)!)) visit(d);
-    order.push(id);
-  };
-  visit(project.rootId);
-  for (const id of visitOrder(ids.filter((id) => !hasDependent.has(id)))) visit(id);
-  for (const id of ids) visit(id);
-
-  const timedIds = order.filter(timed);
-  const untimedIds = order.filter((id) => !timed(id)).sort(byId);
+  const timedIds = ids.filter(timed);
+  const untimedIds = ids.filter((id) => !timed(id));
 
   const starts = timedIds.map(startOf);
   const ends = timedIds.map(endOf);
@@ -85,9 +76,62 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
   const end = (ends.length ? Math.max(...ends) : projectStart + DAY_MS) + PAD_MS;
   const px = (ms: number) => (ms / DAY_MS) * pxPerDay;
 
+  // Balanced rows. Working up from the leaves, each node sits on the row at the midpoint of its dependencies'
+  // rows (so the root ends up in the middle of the chart); leaves take consecutive rows. A dependency shared
+  // by several nodes is placed once, under whichever is visited first. A bar never shares a row with another
+  // bar it would overlap in time, so a node is moved to the nearest free row.
+  const xOf = (id: string) => px(startOf(id) - origin);
+  const wOf = (id: string) => Math.max(px(endOf(id) - startOf(id)), 2);
+  const reach = (id: string) => xOf(id) + wOf(id) - TOUCH_TOLERANCE;
+  const taken = new Map<number, string[]>();
+  const rowOf = new Map<string, number>();
+  const fits = (id: string, row: number) =>
+    (taken.get(row) ?? []).every((other) => reach(other) <= xOf(id) || reach(id) <= xOf(other));
+  const timedDeps = (id: string) => visitOrder(deps.get(id)!.filter(timed));
+  let nextLeaf = 0;
+  const place = (id: string, path: Set<string>) => {
+    if (rowOf.has(id) || path.has(id)) return;
+    path.add(id);
+    const kids = timedDeps(id);
+    for (const k of kids) place(k, path);
+    path.delete(id);
+    const rows = kids.map((k) => rowOf.get(k)).filter((r): r is number => r !== undefined);
+    let row: number;
+    if (rows.length) {
+      const want = Math.round((Math.min(...rows) + Math.max(...rows)) / 2);
+      row = want;
+      for (let step = 1; !fits(id, row); step++) row = step % 2 ? want + Math.ceil(step / 2) : want - step / 2;
+    } else {
+      row = nextLeaf;
+      while (!fits(id, row)) row++;
+      nextLeaf = row + 1;
+    }
+    rowOf.set(id, row);
+    taken.set(row, [...(taken.get(row) ?? []), id]);
+  };
+  // The root's tree first, then whatever isn't reachable from it, below.
+  const tops = [
+    ...(timed(project.rootId) ? [project.rootId] : []),
+    ...visitOrder(timedIds.filter((id) => id !== project.rootId && !hasDependent.has(id))),
+    ...timedIds,
+  ];
+  for (const top of tops) {
+    // Anything not reachable from the root goes below the root's tree, never beside it.
+    if (rowOf.size) nextLeaf = Math.max(nextLeaf, Math.max(...rowOf.values()) + 1);
+    place(top, new Set());
+  }
+  const top = timedIds.length ? Math.min(...rowOf.values()) : 0;
+  const rows = timedIds.length ? Math.max(...rowOf.values()) - top + 1 : 0;
+
+  const labelMax = (id: string): number | null => {
+    const gaps = timedIds
+      .filter((o) => o !== id && rowOf.get(o) === rowOf.get(id) && xOf(o) >= xOf(id))
+      .map((o) => xOf(o) - (xOf(id) + wOf(id)) - 8);
+    return gaps.length ? Math.max(0, Math.min(...gaps)) : null;
+  };
   const bars: Bar[] = [
-    ...timedIds.map((id, row) => ({ id, row, x: px(startOf(id) - origin), width: px(endOf(id) - startOf(id)), timed: true })),
-    ...untimedIds.map((id, i) => ({ id, row: timedIds.length + i, x: px(PAD_MS), width: px(DAY_MS), timed: false })),
+    ...timedIds.map((id) => ({ id, row: rowOf.get(id)! - top, x: xOf(id), width: px(endOf(id) - startOf(id)), timed: true, labelMax: labelMax(id) })),
+    ...untimedIds.map((id, i) => ({ id, row: rows + i, x: px(PAD_MS), width: px(DAY_MS), timed: false, labelMax: null })),
   ];
   const barOf = new Map(bars.map((b) => [b.id, b]));
   const mid = (row: number) => row * ROW_HEIGHT + ROW_HEIGHT / 2;
@@ -136,10 +180,10 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
     origin,
     spanMs: end - origin,
     width: px(end - origin),
-    height: bars.length * ROW_HEIGHT,
+    height: (rows + untimedIds.length) * ROW_HEIGHT,
     bars,
     edges,
-    untimedFromRow: timedIds.length,
+    untimedFromRow: rows,
   };
 }
 

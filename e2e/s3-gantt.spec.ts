@@ -23,9 +23,9 @@ test.describe("S3: graph-based Gantt", () => {
     expect(Math.abs(payments.x - docs.x)).toBeLessThan(1);
     // The root starts when its latest dependency completes
     expect(Math.abs(release.x - (payments.x + payments.width))).toBeLessThan(1.5);
-    // Dependencies sit above their dependent; the root is last
-    expect(release.y).toBeGreaterThan(payments.y);
-    expect(release.y).toBeGreaterThan(docs.y);
+    // The root is centred between its dependencies rather than stacked below them
+    expect(release.y).toBeGreaterThanOrEqual(Math.min(docs.y, payments.y));
+    expect(release.y).toBeLessThanOrEqual(Math.max(docs.y, payments.y));
   });
 
   test("edges run from each dependency's end to its dependent's start", async ({ page }) => {

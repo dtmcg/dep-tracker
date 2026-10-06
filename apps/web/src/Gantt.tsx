@@ -8,6 +8,8 @@ import { BAR_HEIGHT, DAY_MS, fitPxPerDay, layoutGantt, ROW_HEIGHT, timeTicks, ZO
 /** Room to the right of the last bar for its title and date. */
 const LABEL_SPACE = 320;
 const AXIS_HEIGHT = 32;
+/** Below this much room to its right, a bar's label is too short to read and the title is shown inside the bar instead. */
+const SQUEEZED_LABEL = 56;
 
 interface GanttProps {
   project: Project;
@@ -228,7 +230,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
               <span key={t.ms} style={{ left: xOf(t.ms) }} />
             ))}
           </div>
-          {layout.untimedFromRow < layout.bars.length && (
+          {layout.bars.some((b) => !b.timed) && (
             <div className="untimed-band" style={{ top: layout.untimedFromRow * ROW_HEIGHT }} aria-hidden="true">
               <span>Can't be scheduled</span>
             </div>
@@ -291,15 +293,23 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                 data-state={stateOf(b.id)}
                 data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}
                 className="bar-row"
-                style={{ left: b.x, top: barTop(b.row), height: BAR_HEIGHT }}
+                style={{ left: b.x, top: barTop(b.row), height: BAR_HEIGHT}}
               >
                 <button
                   className="bar-button"
                   aria-label={node.title}
+                  title={node.title}
                   aria-pressed={selectedId === b.id}
                   onClick={() => onSelect(selectedId === b.id ? null : b.id)}
                 >
-                  <span className="bar" data-testid="bar" style={{ width: Math.max(b.width, 2), boxShadow: rings || undefined }} />
+                  <span className="bar" data-testid="bar" style={{ width: Math.max(b.width, 2), boxShadow: rings || undefined }}>
+                    {/* When the next bar on the row leaves no room for the label, the title goes inside the bar. */}
+                    {b.labelMax !== null && b.labelMax < SQUEEZED_LABEL && b.width >= 40 && (
+                      <span className="bar-inner" aria-hidden="true">
+                        {node.title}
+                      </span>
+                    )}
+                  </span>
                   {/* Inside the button, so a click here still selects; a drag from it connects (FR-10). */}
                   <span
                     className="connector"
@@ -308,7 +318,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                     style={{ left: Math.max(b.width, 2) - 5 }}
                     title="Drag onto another bar to make it depend on this one"
                   />
-                  <span className="bar-label">
+                  <span className="bar-label" style={b.labelMax === null ? undefined : { maxWidth: b.labelMax }}>
                     <span className="bar-title">{node.title}</span>
                     {times ? (
                       <time data-testid="completion" dateTime={times.completion}>

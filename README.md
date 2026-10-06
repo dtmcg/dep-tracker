@@ -167,3 +167,7 @@ The app remembers every project you create, open or import, and offers them in a
 ## Optional work time and start
 
 "New project" asks only for where to keep it, a name and the success criteria; the project starts now. A node's work time is optional too: a node without one is shown dashed with a "no work time" badge, keeps its link, and adds nothing to the dates of what depends on it until you enter a work time. The Open project tab shows a "No projects yet" hint until you have created, opened or imported one.
+
+## How the chart is laid out
+
+Time runs left to right. Vertically the chart is balanced like a tree: each node sits at the midpoint of its dependencies, recursively, so the success criteria ends up in the middle and the chart re-balances as you add dependencies. Bars that follow one another in time may share a row; if a label doesn't fit before the next bar it moves inside the bar, and opens in full on hover or selection. Nodes that can't be scheduled go in a band at the bottom, and anything not linked to the success criteria goes below its tree.

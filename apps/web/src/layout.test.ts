@@ -42,16 +42,15 @@ describe("layoutGantt", () => {
     assert.equal(payments.width, 700);
   });
 
-  it("gives every node its own row, dependencies above their dependents and the root last", () => {
+  it("keeps the root in the middle of its dependencies, and shared ones above and below it", () => {
     const l = layoutOf(project());
     const row = (id: string) => l.bars.find((b) => b.id === id)!.row;
-    assert.equal(new Set(l.bars.map((b) => b.row)).size, l.bars.length);
-    assert.ok(row("c") < row("a") && row("c") < row("b"));
-    assert.ok(row("a") < row("r") && row("b") < row("r"));
+    const mid = (row("a") + row("b")) / 2;
+    assert.ok(Math.abs(row("r") - mid) <= 1, `root row ${row("r")} vs middle of its dependencies ${mid}`);
+    assert.ok(row("a") !== row("b"));
     // Orphans (not reachable from the root) sit after the root's tree
-    assert.ok(row("o") > row("r"));
+    assert.ok(row("o") > Math.max(row("r"), row("a"), row("b"), row("c")));
   });
-
   it("draws one edge per dependency, ending at the dependent's start and never doubling back (FR-3)", () => {
     const l = layoutOf(project());
     assert.equal(l.edges.length, 4);
@@ -136,5 +135,84 @@ describe("timeTicks", () => {
       ticks.map((t) => t.label),
       ["Nov 2026", "Dec 2026", "Jan 2027"],
     );
+  });
+});
+
+
+describe("balanced layout", () => {
+  const n = (id: string, workTime = "1d") => ({ id, title: id, workTime, labels: [], description: "", links: [] });
+  const proj = (nodes: string[], edges: [string, string][]): Project => ({
+    id: "p",
+    name: "P",
+    start: "2026-11-02T09:00:00.000Z",
+    rootId: "r",
+    nodes: nodes.map((id) => n(id)),
+    edges: edges.map(([dependentId, dependencyId]) => ({ dependentId, dependencyId })),
+  });
+  const rowsOf = (p: Project) => {
+    const l = layoutOf(p);
+    return (id: string) => l.bars.find((b) => b.id === id)!.row;
+  };
+
+  it("centres the root among four dependencies", () => {
+    const p = proj(["r", "a", "b", "c", "d"], [["r", "a"], ["r", "b"], ["r", "c"], ["r", "d"]]);
+    const row = rowsOf(p);
+    const rows = [row("a"), row("b"), row("c"), row("d")];
+    assert.ok(Math.abs(row("r") - (Math.min(...rows) + Math.max(...rows)) / 2) <= 1);
+    assert.equal(new Set(rows).size, 4);
+  });
+
+  it("re-balances when a dependency is added", () => {
+    const three = proj(["r", "a", "b", "c"], [["r", "a"], ["r", "b"], ["r", "c"]]);
+    const five = proj(["r", "a", "b", "c", "d", "e"], [["r", "a"], ["r", "b"], ["r", "c"], ["r", "d"], ["r", "e"]]);
+    for (const p of [three, five]) {
+      const row = rowsOf(p);
+      const deps = p.nodes.filter((x) => x.id !== "r").map((x) => row(x.id));
+      assert.ok(Math.abs(row("r") - (Math.min(...deps) + Math.max(...deps)) / 2) <= 1);
+    }
+    assert.ok(rowsOf(five)("r") > rowsOf(three)("r"), "the root moves down as there are more dependencies above and below it");
+  });
+
+  it("centres every node among its own dependencies, recursively", () => {
+    // r needs x and y; x needs x1, x2, x3; y needs y1
+    const p = proj(
+      ["r", "x", "y", "x1", "x2", "x3", "y1"],
+      [["r", "x"], ["r", "y"], ["x", "x1"], ["x", "x2"], ["x", "x3"], ["y", "y1"]],
+    );
+    const row = rowsOf(p);
+    const near = (parent: string, kids: string[]) => {
+      const rs = kids.map(row);
+      return Math.abs(row(parent) - (Math.min(...rs) + Math.max(...rs)) / 2);
+    };
+    assert.ok(near("x", ["x1", "x2", "x3"]) <= 1);
+    assert.ok(near("y", ["y1"]) <= 1);
+    assert.ok(near("r", ["x", "y"]) <= 1.5);
+    // The root is roughly in the middle of the whole chart
+    const l = layoutOf(p);
+    const last = Math.max(...l.bars.map((b) => b.row));
+    assert.ok(Math.abs(row("r") - last / 2) <= 1.5, `root ${row("r")} of 0..${last}`);
+  });
+
+  it("never lets two bars overlap on one row, though they may touch end to start", () => {
+    const p = proj(
+      ["r", "x", "y", "x1", "x2", "x3", "y1", "y2"],
+      [["r", "x"], ["r", "y"], ["x", "x1"], ["x", "x2"], ["x", "x3"], ["y", "y1"], ["y", "y2"]],
+    );
+    for (const pxPerDay of [6, 24, 96, 960]) {
+      const l = layoutOf(p, pxPerDay);
+      for (const a of l.bars) {
+        for (const b of l.bars) {
+          if (a.id >= b.id || a.row !== b.row) continue;
+          const [first, second] = a.x <= b.x ? [a, b] : [b, a];
+          assert.ok(first.x + first.width <= second.x + 0.5, `${a.id} and ${b.id} overlap at ${pxPerDay}px/day`);
+        }
+      }
+    }
+  });
+
+  it("starts at row zero and has no empty rows above the first bar", () => {
+    const l = layoutOf(proj(["r", "a", "b"], [["r", "a"], ["r", "b"]]));
+    assert.equal(Math.min(...l.bars.map((b) => b.row)), 0);
+    assert.equal(l.height, (Math.max(...l.bars.map((b) => b.row)) + 1) * ROW_HEIGHT);
   });
 });
