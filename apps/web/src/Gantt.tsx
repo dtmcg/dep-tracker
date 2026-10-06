@@ -59,7 +59,17 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
   };
   const isCyclic = (id: string) => schedule.flags[id]?.includes("cyclic") ?? false;
   const stateOf = (id: string) =>
-    isCyclic(id) ? "cyclic" : schedule.flags[id]?.includes("blockedByCycle") ? "blocked" : schedule.nodes[id] ? "ok" : "error";
+    isCyclic(id)
+      ? "cyclic"
+      : schedule.flags[id]?.includes("blockedByCycle")
+        ? "blocked"
+        : schedule.flags[id]?.includes("unresolved")
+          ? "unresolved"
+          : schedule.flags[id]?.includes("blockedByReference")
+            ? "blocked-reference"
+            : schedule.nodes[id]
+              ? "ok"
+              : "error";
   const xOf = useCallback((ms: number) => ((ms - layout.origin) / DAY_MS) * pxPerDay, [layout.origin, pxPerDay]);
 
   // "Fit" keeps the whole plan in view as nodes are added or the window changes, until you zoom by hand.
@@ -275,6 +285,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                 data-highlight={barHighlight(b.id)}
                 data-labels-active={on.length ? on.join(" ") : undefined}
                 data-timed={b.timed}
+                data-reference={node.ref ? "true" : undefined}
                 data-state={stateOf(b.id)}
                 data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}
                 className="bar-row"
@@ -303,9 +314,15 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                       </time>
                     ) : (
                       <span className="bar-note">
-                        {stateOf(b.id) === "cyclic" ? "cycle" : stateOf(b.id) === "blocked" ? "blocked by a cycle" : "can't schedule"}
+                        {{
+                          cyclic: "cycle",
+                          blocked: "blocked by a cycle",
+                          unresolved: "other project can't be read",
+                          "blocked-reference": "waiting on another project",
+                        }[stateOf(b.id) as string] ?? "can't schedule"}
                       </span>
                     )}
+                    {node.ref && <span className="bar-badge reference-badge">other project</span>}
                     {schedule.flags[b.id]?.includes("orphan") && <span className="bar-badge">not linked to the success criteria</span>}
                     {on.map((label) => (
                       <span

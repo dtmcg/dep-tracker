@@ -8,6 +8,16 @@ export interface ProjectNode {
   labels: string[];
   description: string;
   links: string[];
+  /**
+   * Set on a reference node (FR-6): it stands in for the success criteria of
+   * the project stored at `ref.storage`. Its completion is that project's
+   * completion; it has no work time of its own ("0m") and no dependencies.
+   */
+  ref?: ReferenceTarget;
+}
+
+export interface ReferenceTarget {
+  storage: StorageDescriptor;
 }
 
 /** The dependent cannot complete before the dependency. */
@@ -79,10 +89,20 @@ export interface NodeTimes {
 }
 
 /**
- * cyclic: part of a dependency cycle. blockedByCycle: depends, directly or not,
- * on a cyclic node. orphan: not reachable from the success criteria.
+ * cyclic: part of a dependency cycle (inside this project or across projects).
+ * blockedByCycle: depends, directly or not, on a cyclic node. unresolved: a
+ * reference whose project can't be read or scheduled. blockedByReference:
+ * depends, directly or not, on an unresolved reference. orphan: not reachable
+ * from the success criteria.
  */
-export type NodeFlag = "cyclic" | "blockedByCycle" | "orphan";
+export type NodeFlag = "cyclic" | "blockedByCycle" | "unresolved" | "blockedByReference" | "orphan";
+
+/**
+ * What the server learned about another project for a reference node: its
+ * root's completion, or why that couldn't be worked out. `cycle` is set when
+ * the reason is a loop of references, as project names, e.g. [A, B, A].
+ */
+export type ExternalTime = { completion: string } | { error: string; cycle?: string[] };
 
 export interface Schedule {
   nodes: Record<string, NodeTimes>;
@@ -92,4 +112,6 @@ export interface Schedule {
   flags: Record<string, NodeFlag[]>;
   /** Each cycle as a closed path following "depends on" edges, e.g. [a, b, a]. */
   cycles: string[][];
+  /** Reference nodes caught in a loop of references between projects, with the project names in the loop. */
+  projectCycles: { nodeId: string; path: string[] }[];
 }

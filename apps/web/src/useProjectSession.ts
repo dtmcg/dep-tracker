@@ -122,15 +122,17 @@ export function useProjectSession(api: Api, initial: OpenedProject, onClose: () 
     let stopped = false;
     const check = async () => {
       if (stopped || pending.current > 0) return;
-      let version: string;
+      let version: { version: string; referencesVersion?: string };
       try {
         version = await api.version(confirmed.current.project.id);
       } catch {
         return; // Transient: the next poll will try again.
       }
-      if (stopped || pending.current > 0 || version === confirmed.current.version) return;
+      const unchanged =
+        version.version === confirmed.current.version && (version.referencesVersion ?? "") === (confirmed.current.referencesVersion ?? "");
+      if (stopped || pending.current > 0 || unchanged) return;
       try {
-        await reload("The project changed on disk and has been reloaded.");
+        await reload((version.version === confirmed.current.version ? "A project this one references changed, so dates were updated." : "The project changed on disk and has been reloaded."));
         setSaveState((s) => (s.kind === "error" ? { kind: "saved" } : s));
       } catch (error) {
         // Say so rather than silently showing stale data (FR-26).

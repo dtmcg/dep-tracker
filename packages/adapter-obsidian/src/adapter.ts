@@ -3,7 +3,9 @@ import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   type Dependency,
+  formatReference,
   type LoadedProject,
+  parseReference,
   type Project,
   ProjectExistsError,
   type ProjectNode,
@@ -29,7 +31,7 @@ export class ObsidianAdapterError extends Error {
   }
 }
 
-const TASK_KEYS = new Set(["id", "title", "work_time", "not_before", "depends_on", "tags", "links"]);
+const TASK_KEYS = new Set(["id", "title", "work_time", "not_before", "depends_on", "tags", "links", "reference"]);
 const PROJECT_KEYS = new Set(["dep_tracker", "id", "name", "start", "success_criteria", "label_colours"]);
 const PROJECT_SUFFIX = " (project)";
 
@@ -129,8 +131,19 @@ function parse(notes: NoteFile[], folder: string): { project: Project; idOf: Map
       description: note.body,
       links: list(note.data.links),
     };
+    const reference = str(note.data.reference).trim();
     const notBefore = str(note.data.not_before).trim();
-    if (notBefore) node.notBefore = toIso(notBefore, `${file}, not_before`);
+    if (reference) {
+      // A reference stands in for another project's success criteria; its time comes from there.
+      try {
+        node.ref = { storage: parseReference(reference) };
+      } catch (error) {
+        throw new ObsidianAdapterError(`${file}, reference: ${(error as Error).message}`);
+      }
+      node.workTime = "0m";
+    } else if (notBefore) {
+      node.notBefore = toIso(notBefore, `${file}, not_before`);
+    }
     return node;
   });
 
@@ -214,6 +227,7 @@ function render(
     const data: Data = { id: node.id };
     if (stem(file) !== node.title) data.title = node.title;
     data.work_time = node.workTime;
+    if (node.ref) data.reference = formatReference(node.ref.storage);
     if (node.notBefore) data.not_before = localDateTime(node.notBefore);
     const deps = project.edges.filter((e) => e.dependentId === node.id).map((e) => linkTo(e.dependencyId));
     if (deps.length) data.depends_on = deps;

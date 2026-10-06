@@ -1,18 +1,32 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { newId, type ProjectNode } from "@dep-tracker/domain";
+import { newId, parseReference, type ProjectNode, STORAGE_KINDS, type StorageDescriptor } from "@dep-tracker/domain";
 import { formatDateTime } from "./format.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { formChanges, type NodeForm, toForm } from "./nodeForm.ts";
-import { applyLocally, dependencyCommands } from "./projectState.ts";
+import { applyLocally, dependencyCommands, referenceCommands } from "./projectState.ts";
 import type { Session } from "./useProjectSession.ts";
 
 /** Side panel for the selected node (FR-7, FR-8, FR-9, FR-10). */
-export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; session: Session; onClose: () => void }) {
+const KIND_NAMES: Record<StorageDescriptor["kind"], string> = { csv: "CSV folder", excel: "Excel file", obsidian: "Obsidian folder", gsheets: "Google Sheet" };
+
+export function DetailsPanel({
+  node,
+  session,
+  onClose,
+  onOpenReference,
+}: {
+  node: ProjectNode;
+  session: Session;
+  onClose: () => void;
+  /** Opens the project a reference node points at. */
+  onOpenReference?: (storage: StorageDescriptor) => Promise<void>;
+}) {
   const { snapshot } = session;
   const { project } = snapshot;
   const times = snapshot.schedule.nodes[node.id];
   const isRoot = node.id === project.rootId;
-  const [mode, setMode] = useState<"view" | "edit" | "add">("view");
+  const [mode, setMode] = useState<"view" | "edit" | "add" | "addRef">("view");
+  const [openError, setOpenError] = useState<string | null>(null);
   const description = useMemo(() => renderMarkdown(node.description), [node.description]);
   const titleOf = (id: string) => project.nodes.find((n) => n.id === id)?.title ?? id;
   const dependencies = project.edges.filter((e) => e.dependentId === node.id).map((e) => e.dependencyId);
@@ -35,18 +49,29 @@ export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; se
       ) : (
         <>
           <dl className="facts">
-            <div>
-              <dt>Work time</dt>
-              <dd data-testid="detail-work">{node.workTime}</dd>
-            </div>
-            <div>
-              <dt>Not before</dt>
-              <dd data-testid="detail-not-before">{node.notBefore ? formatDateTime(node.notBefore) : "None"}</dd>
-            </div>
-            <div>
-              <dt>Dependency time</dt>
-              <dd data-testid="detail-dependency-time">{times?.dependencyTime ? formatDateTime(times.dependencyTime) : "None"}</dd>
-            </div>
+            {node.ref ? (
+              <div>
+                <dt>Other project</dt>
+                <dd data-testid="detail-reference">
+                  {KIND_NAMES[node.ref.storage.kind]}: <span className="mono">{node.ref.storage.path}</span>
+                </dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt>Work time</dt>
+                  <dd data-testid="detail-work">{node.workTime}</dd>
+                </div>
+                <div>
+                  <dt>Not before</dt>
+                  <dd data-testid="detail-not-before">{node.notBefore ? formatDateTime(node.notBefore) : "None"}</dd>
+                </div>
+                <div>
+                  <dt>Dependency time</dt>
+                  <dd data-testid="detail-dependency-time">{times?.dependencyTime ? formatDateTime(times.dependencyTime) : "None"}</dd>
+                </div>
+              </>
+            )}
             <div>
               <dt>Completion</dt>
               <dd data-testid="detail-completion">{times ? formatDateTime(times.completion) : "Not scheduled"}</dd>
@@ -72,10 +97,29 @@ export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; se
               ))}
             </ul>
           )}
+          {node.ref && onOpenReference && (
+            <div className="actions">
+              <button className="small" onClick={() => onOpenReference(node.ref!.storage).catch((e: Error) => setOpenError(e.message))}>
+                Open that project
+              </button>
+            </div>
+          )}
+          {openError && (
+            <p className="warn" role="alert">
+              {openError}
+            </p>
+          )}
           <div className="actions">
-            <button className="small" onClick={() => setMode(mode === "add" ? "view" : "add")} aria-expanded={mode === "add"}>
-              Add dependency
-            </button>
+            {!node.ref && (
+              <>
+                <button className="small" onClick={() => setMode(mode === "add" ? "view" : "add")} aria-expanded={mode === "add"}>
+                  Add dependency
+                </button>
+                <button className="small" onClick={() => setMode(mode === "addRef" ? "view" : "addRef")} aria-expanded={mode === "addRef"}>
+                  Add reference to another project
+                </button>
+              </>
+            )}
             <button className="ghost small" onClick={() => setMode("edit")}>
               Edit
             </button>
@@ -97,6 +141,17 @@ export function DetailsPanel({ node, session, onClose }: { node: ProjectNode; se
               onCancel={() => setMode("view")}
               onAdd={(input) => {
                 session.apply(dependencyCommands(node.id, input, newId()));
+                setMode("view");
+              }}
+            />
+          )}
+
+          {mode === "addRef" && (
+            <AddReferenceForm
+              dependent={node}
+              onCancel={() => setMode("view")}
+              onAdd={(input) => {
+                session.apply(referenceCommands(node.id, input, newId()));
                 setMode("view");
               }}
             />
@@ -265,16 +320,26 @@ function NodeEditor({ node, session, onDone }: { node: ProjectNode; session: Ses
         <input type="text" {...field("title")} />
         {errors.title && <p className="field-error">{errors.title}</p>}
       </div>
-      <div className="field">
-        <label htmlFor={`edit-workTime-${node.id}`}>Work time</label>
-        <input type="text" {...field("workTime")} />
-        {errors.workTime && <p className="field-error">{errors.workTime}</p>}
-      </div>
-      <div className="field">
-        <label htmlFor={`edit-notBefore-${node.id}`}>Not before</label>
-        <input type="datetime-local" {...field("notBefore")} />
-        {errors.notBefore && <p className="field-error">{errors.notBefore}</p>}
-      </div>
+      {node.ref ? (
+        <div className="field wide">
+          <label htmlFor={`edit-reference-${node.id}`}>Other project</label>
+          <input type="text" {...field("reference")} placeholder="csv:C:\\plans\\partner" />
+          {errors.reference && <p className="field-error">{errors.reference}</p>}
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor={`edit-workTime-${node.id}`}>Work time</label>
+            <input type="text" {...field("workTime")} />
+            {errors.workTime && <p className="field-error">{errors.workTime}</p>}
+          </div>
+          <div className="field">
+            <label htmlFor={`edit-notBefore-${node.id}`}>Not before</label>
+            <input type="datetime-local" {...field("notBefore")} />
+            {errors.notBefore && <p className="field-error">{errors.notBefore}</p>}
+          </div>
+        </>
+      )}
       <div className="field wide">
         <label htmlFor={`edit-description-${node.id}`}>Description</label>
         <textarea rows={5} {...field("description")} placeholder="Markdown supported" />
@@ -330,6 +395,67 @@ function AddDependencyForm({
       <div className="field narrow">
         <label htmlFor={ids.work}>Work time</label>
         <input id={ids.work} type="text" value={workTime} onChange={(e) => setWorkTime(e.target.value)} required />
+      </div>
+      <div className="actions">
+        <button type="submit">Add</button>
+        <button type="button" className="ghost" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AddReferenceForm({
+  dependent,
+  onAdd,
+  onCancel,
+}: {
+  dependent: ProjectNode;
+  onAdd: (input: { title: string; storage: StorageDescriptor }) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<StorageDescriptor["kind"]>("csv");
+  const [path, setPath] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const ids = { title: `ref-title-${dependent.id}`, kind: `ref-kind-${dependent.id}`, path: `ref-path-${dependent.id}` };
+  return (
+    <form
+      className="inline-form"
+      aria-label={`New reference needed by ${dependent.title}`}
+      onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        try {
+          const storage = parseReference(`${kind}:${path}`);
+          setError(null);
+          onAdd({ title, storage });
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onCancel();
+      }}
+    >
+      <div className="field grow">
+        <label htmlFor={ids.title}>Title</label>
+        <input id={ids.title} type="text" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required />
+      </div>
+      <div className="field">
+        <label htmlFor={ids.kind}>Stored in</label>
+        <select id={ids.kind} value={kind} onChange={(e) => setKind(e.target.value as StorageDescriptor["kind"])}>
+          {STORAGE_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {KIND_NAMES[k]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field grow">
+        <label htmlFor={ids.path}>Location</label>
+        <input id={ids.path} type="text" value={path} onChange={(e) => setPath(e.target.value)} required placeholder="Folder, file path or sheet id" />
+        {error && <p className="field-error">{error}</p>}
       </div>
       <div className="actions">
         <button type="submit">Add</button>

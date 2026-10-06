@@ -46,3 +46,37 @@ describe("node form", () => {
     assert.match(errors.workTime ?? "", /"2x"/);
   });
 });
+
+describe("node form for a reference", () => {
+  const ref: ProjectNode = {
+    id: "n05",
+    title: "Partner API",
+    workTime: "0m",
+    labels: [],
+    description: "",
+    links: [],
+    ref: { storage: { kind: "excel", path: "C:\\plans\\partner.xlsx" } },
+  };
+
+  it("shows where the reference points", () => {
+    assert.equal(toForm(ref).reference, "excel:C:\\plans\\partner.xlsx");
+    assert.equal(toForm(node).reference, "");
+  });
+
+  it("ignores work time and not-before, which belong to the other project", () => {
+    const { changes, errors } = formChanges(ref, { ...toForm(ref), workTime: "garbage", notBefore: "2026-11-05T09:00" });
+    assert.deepEqual(errors, {});
+    assert.deepEqual(changes, {});
+  });
+
+  it("retargets a reference", () => {
+    const { changes, errors } = formChanges(ref, { ...toForm(ref), reference: "csv:/plans/partner" });
+    assert.deepEqual(errors, {});
+    assert.deepEqual(changes, { ref: { storage: { kind: "csv", path: "/plans/partner" } } });
+  });
+
+  it("says what is wrong with a reference", () => {
+    const { errors } = formChanges(ref, { ...toForm(ref), reference: "word:/x" });
+    assert.match(errors.reference ?? "", /csv, excel, obsidian, gsheets/);
+  });
+});

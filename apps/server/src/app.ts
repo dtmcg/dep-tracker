@@ -14,6 +14,7 @@ import {
   type StorageDescriptor,
   VersionConflictError,
 } from "@dep-tracker/domain";
+import { resolveReferences } from "./references.ts";
 
 /** Google sign-in, as provided by @dep-tracker/adapter-gsheets. */
 export interface GoogleSignIn {
@@ -102,9 +103,12 @@ export function createApp(options: AppOptions): Server {
     return adapter;
   };
 
-  const opened = (descriptor: StorageDescriptor, loaded: LoadedProject) => {
+  const lookup = (descriptor: StorageDescriptor): StorageAdapter | undefined => options.adapters[descriptor.kind];
+
+  const opened = async (descriptor: StorageDescriptor, loaded: LoadedProject) => {
     registry.set(loaded.project.id, { descriptor, adapter: adapterFor(descriptor) });
-    return { storage: descriptor, ...loaded, schedule: schedule(loaded.project) };
+    const { externals, referencesVersion } = await resolveReferences(loaded.project, descriptor, lookup);
+    return { storage: descriptor, ...loaded, externals, referencesVersion, schedule: schedule(loaded.project, externals) };
   };
 
   const registered = (id: string): OpenProject => {
@@ -142,7 +146,7 @@ export function createApp(options: AppOptions): Server {
       const descriptor = parseDescriptor((await readJson(req)).storage);
       const adapter = adapterFor(descriptor);
       const loaded = await adapter.load(descriptor).catch((e) => Promise.reject(toHttp(e)));
-      return sendJson(res, 200, opened(descriptor, loaded));
+      return sendJson(res, 200, await opened(descriptor, loaded));
     }
 
     if (route === "POST /api/projects") {
@@ -170,7 +174,7 @@ export function createApp(options: AppOptions): Server {
           },
         ]);
         const version = await adapter.create(descriptor, project);
-        return sendJson(res, 201, opened(descriptor, { project, version }));
+        return sendJson(res, 201, await opened(descriptor, { project, version }));
       } catch (error) {
         throw toHttp(error);
       }
@@ -183,7 +187,7 @@ export function createApp(options: AppOptions): Server {
       try {
         const { project } = await adapterFor(source).load(source);
         const version = await adapterFor(target).create(target, project);
-        return sendJson(res, 201, opened(target, { project, version }));
+        return sendJson(res, 201, await opened(target, { project, version }));
       } catch (error) {
         throw toHttp(error);
       }
@@ -194,8 +198,17 @@ export function createApp(options: AppOptions): Server {
       const id = decodeURIComponent(match[1]!);
       const { descriptor, adapter } = registered(id);
       try {
-        if (req.method === "GET" && !match[2]) return sendJson(res, 200, opened(descriptor, await adapter.load(descriptor)));
-        if (req.method === "GET" && match[2] === "/version") return sendJson(res, 200, { version: await adapter.version(descriptor) });
+        if (req.method === "GET" && !match[2]) return sendJson(res, 200, await opened(descriptor, await adapter.load(descriptor)));
+        if (req.method === "GET" && match[2] === "/version") {
+          const version = await adapter.version(descriptor);
+          // An unreadable project is reported by the reload the changed version triggers, not here.
+          const referencesVersion = await adapter
+            .load(descriptor)
+            .then(({ project }) => resolveReferences(project, descriptor, lookup))
+            .then((r) => r.referencesVersion)
+            .catch(() => "");
+          return sendJson(res, 200, { version, referencesVersion });
+        }
         if (req.method === "POST" && match[2] === "/export") {
           // Writes a copy; the open project stays where it is.
           const target = parseDescriptor((await readJson(req)).storage);
@@ -212,7 +225,7 @@ export function createApp(options: AppOptions): Server {
           if (current.version !== body.expectedVersion) throw new VersionConflictError();
           const project = applyCommands(current.project, body.commands as Command[]);
           const version = await adapter.save(descriptor, project, current.version);
-          return sendJson(res, 200, opened(descriptor, { project, version }));
+          return sendJson(res, 200, await opened(descriptor, { project, version }));
         }
       } catch (error) {
         if (error instanceof CommandError) throw new HttpError(422, error.message);

@@ -3,9 +3,10 @@ import { DetailsPanel } from "./DetailsPanel.tsx";
 import { formatDateTime } from "./format.ts";
 import { Gantt } from "./Gantt.tsx";
 import { LabelKey } from "./LabelKey.tsx";
+import type { StorageDescriptor } from "@dep-tracker/domain";
 import type { Session } from "./useProjectSession.ts";
 
-export function ProjectView({ session }: { session: Session }) {
+export function ProjectView({ session, onOpenReference }: { session: Session; onOpenReference?: (storage: StorageDescriptor) => Promise<void> }) {
   const { snapshot, saveState, notice } = session;
   const { project } = snapshot;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -77,6 +78,25 @@ export function ProjectView({ session }: { session: Session }) {
         <CycleBanner cycles={snapshot.schedule.cycles} titleOf={(id) => project.nodes.find((n) => n.id === id)?.title ?? id} onSelect={setSelectedId} />
       )}
 
+      {snapshot.schedule.projectCycles.length > 0 && (
+        <section className="cycle-banner" role="region" aria-label="Project cycles">
+          <strong>
+            {snapshot.schedule.projectCycles.length === 1 ? "A loop between projects" : `${snapshot.schedule.projectCycles.length} loops between projects`} — the
+            references below lead back to a project already in the chain, so the nodes that depend on them can't be scheduled.
+          </strong>
+          <ul>
+            {snapshot.schedule.projectCycles.map(({ nodeId, path }) => (
+              <li key={nodeId}>
+                <button className="link-button" onClick={() => setSelectedId(nodeId)}>
+                  {project.nodes.find((n) => n.id === nodeId)?.title ?? nodeId}
+                </button>
+                : {path.join(" → ")}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <LabelKey
         project={project}
         active={activeLabels}
@@ -93,7 +113,7 @@ export function ProjectView({ session }: { session: Session }) {
           onSelect={setSelectedId}
           onConnect={(dependencyId, dependentId) => session.apply([{ type: "addEdge", dependentId, dependencyId }])}
         />
-        {selected && <DetailsPanel key={selected.id} node={selected} session={session} onClose={() => setSelectedId(null)} />}
+        {selected && <DetailsPanel key={selected.id} node={selected} session={session} onClose={() => setSelectedId(null)} onOpenReference={onOpenReference} />}
       </div>
     </section>
   );

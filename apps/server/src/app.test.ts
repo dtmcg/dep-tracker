@@ -269,6 +269,53 @@ describe("Google sign-in and Sheets (S9)", () => {
   });
 });
 
+describe("reference nodes (S10)", () => {
+  async function addReference(storage: { kind: string; path: string }, partnerFolder: string) {
+    const { body } = await createProject(storage.path);
+    const id = body.project.id as string;
+    const rootId = body.project.rootId as string;
+    const res = await post(`/api/projects/${id}/commands`, {
+      expectedVersion: body.version,
+      commands: [
+        { type: "addNode", node: { id: "ext1", title: "Partner API", workTime: "0m", labels: [], description: "", links: [], ref: { storage: { kind: "csv", path: partnerFolder } } } },
+        { type: "addEdge", dependentId: rootId, dependencyId: "ext1" },
+      ],
+    });
+    return { id, rootId, res, body: await res.json() };
+  }
+
+  it("dates a reference from the other project and the root after it", async () => {
+    const partner = await createProject(await newFolder());
+    const mine = await newFolder();
+    const { res, body, rootId } = await addReference({ kind: "csv", path: mine }, partner.body.storage.path);
+    assert.equal(res.status, 200);
+    assert.equal(body.externals.ext1.completion, partner.body.schedule.nodes[partner.body.project.rootId].completion);
+    assert.equal(body.schedule.nodes[rootId].start, body.externals.ext1.completion);
+    assert.match(body.referencesVersion, /^[0-9a-f]{16}$/);
+  });
+
+  it("reports an unreadable referenced project as unresolved instead of failing", async () => {
+    const mine = await newFolder();
+    const { res, body } = await addReference({ kind: "csv", path: mine }, path.join(here, "missing"));
+    assert.equal(res.status, 200);
+    assert.deepEqual(body.schedule.flags.ext1, ["unresolved"]);
+    assert.match(body.schedule.errors.ext1, /project\.csv/);
+  });
+
+  it("changes referencesVersion on /version when the referenced project is edited", async () => {
+    const partner = await createProject(await newFolder());
+    const { id, body } = await addReference({ kind: "csv", path: await newFolder() }, partner.body.storage.path);
+    const before = (await (await get(`/api/projects/${id}/version`)).json()).referencesVersion;
+    assert.equal(before, body.referencesVersion);
+    await post(`/api/projects/${partner.body.project.id}/commands`, {
+      expectedVersion: partner.body.version,
+      commands: [{ type: "updateNode", id: partner.body.project.rootId, changes: { workTime: "9d" } }],
+    });
+    const after = (await (await get(`/api/projects/${id}/version`)).json()).referencesVersion;
+    assert.notEqual(after, before);
+  });
+});
+
 describe("static web app", () => {
   it("serves assets with a matching content type", async () => {
     const res = await fetch(`${base}/app.js`);

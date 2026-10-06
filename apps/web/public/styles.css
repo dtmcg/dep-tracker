@@ -233,6 +233,12 @@ button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--dan
 .bar-row[data-state="blocked"] .bar { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--danger) 60%, var(--line)); }
 .edge.cyclic { stroke: var(--danger); stroke-width: 2; opacity: 1; }
 .bar-badge { font-size: 11px; color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 999px; padding: 0 6px; }
+/* Reference nodes (S10): a diamond-ended, outlined bar standing in for another project's success criteria. */
+.bar-row[data-reference="true"] .bar { background: transparent; border: 2px solid var(--accent); border-radius: 999px; min-width: 14px; }
+.bar-row[data-reference="true"][data-state="unresolved"] .bar { border-style: dotted; border-color: var(--danger); }
+.bar-row[data-state="unresolved"] .bar-note { color: var(--danger); font-weight: 600; }
+.bar-row[data-state="blocked-reference"] .bar { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--danger) 60%, var(--line)); }
+.reference-badge { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 
 /* Selection and animation (S5) */
 .bar-row { transition: opacity 0.15s; }

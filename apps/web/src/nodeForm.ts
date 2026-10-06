@@ -1,4 +1,4 @@
-import { type NodeChanges, parseDuration, type ProjectNode } from "@dep-tracker/domain";
+import { formatReference, type NodeChanges, parseDuration, parseReference, type ProjectNode } from "@dep-tracker/domain";
 
 export interface NodeForm {
   title: string;
@@ -8,6 +8,8 @@ export interface NodeForm {
   description: string;
   /** One URL per line. */
   links: string;
+  /** "kind:path" of the other project, for reference nodes. */
+  reference: string;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -33,6 +35,7 @@ export function toForm(node: ProjectNode): NodeForm {
     notBefore: toLocalInput(node.notBefore),
     description: node.description,
     links: node.links.join("\n"),
+    reference: node.ref ? formatReference(node.ref.storage) : "",
   };
 }
 
@@ -45,17 +48,27 @@ export function formChanges(node: ProjectNode, form: NodeForm): { changes: NodeC
   if (!title) errors.title = "A title is required";
   else if (title !== node.title) changes.title = title;
 
-  const workTime = form.workTime.trim();
-  try {
-    parseDuration(workTime);
-    if (workTime !== node.workTime) changes.workTime = workTime;
-  } catch (error) {
-    errors.workTime = (error as Error).message;
-  }
+  if (node.ref) {
+    // Timing comes from the other project, so only where it points can change.
+    try {
+      const storage = parseReference(form.reference);
+      if (formatReference(storage) !== formatReference(node.ref.storage)) changes.ref = { storage };
+    } catch (error) {
+      errors.reference = (error as Error).message;
+    }
+  } else {
+    const workTime = form.workTime.trim();
+    try {
+      parseDuration(workTime);
+      if (workTime !== node.workTime) changes.workTime = workTime;
+    } catch (error) {
+      errors.workTime = (error as Error).message;
+    }
 
-  const notBefore = fromLocalInput(form.notBefore);
-  if (notBefore === "invalid") errors.notBefore = "Enter a valid date and time";
-  else if (notBefore !== (node.notBefore ?? null)) changes.notBefore = notBefore;
+    const notBefore = fromLocalInput(form.notBefore);
+    if (notBefore === "invalid") errors.notBefore = "Enter a valid date and time";
+    else if (notBefore !== (node.notBefore ?? null)) changes.notBefore = notBefore;
+  }
 
   if (form.description !== node.description) changes.description = form.description;
 

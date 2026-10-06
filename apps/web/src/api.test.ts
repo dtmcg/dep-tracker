@@ -51,8 +51,8 @@ describe("api client", () => {
   });
 
   it("reads the current version", async () => {
-    const { calls, fetchFn } = recorder(200, { version: "v9" });
-    assert.equal(await createApi("tok", fetchFn).version("p1"), "v9");
+    const { calls, fetchFn } = recorder(200, { version: "v9", referencesVersion: "r2" });
+    assert.deepEqual(await createApi("tok", fetchFn).version("p1"), { version: "v9", referencesVersion: "r2" });
     assert.equal(calls[0]?.url, "/api/projects/p1/version");
   });
 

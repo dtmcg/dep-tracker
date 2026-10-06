@@ -1,5 +1,7 @@
 import {
   type Dependency,
+  formatReference,
+  parseReference,
   type Project,
   type ProjectNode,
   schedule,
@@ -51,6 +53,7 @@ export const TASK_COLUMNS = [
   "Labels",
   "Description",
   "Links",
+  "Reference",
   "Starts",
   "Completes",
 ] as const;
@@ -63,6 +66,7 @@ const TASK_WIDTHS: Record<string, number> = {
   Labels: 18,
   Description: 40,
   Links: 30,
+  Reference: 34,
   Starts: 17,
   Completes: 17,
 };
@@ -132,8 +136,19 @@ function parseTasks(rows: CellValue[][], options: LayoutOptions): ParsedTasks {
         .split(/[\s;]+/)
         .filter(Boolean),
     };
-    const notBefore = toIso(cell(row, "Not before"), `Tasks row ${line}, Not before`, options);
-    if (notBefore) node.notBefore = notBefore;
+    const reference = text(cell(row, "Reference"));
+    if (reference) {
+      // A reference stands in for another project's success criteria; its time comes from there.
+      try {
+        node.ref = { storage: parseReference(reference) };
+      } catch (error) {
+        throw new LayoutError(`Tasks row ${line}, Reference: ${(error as Error).message}`);
+      }
+      node.workTime = "0m";
+    } else {
+      const notBefore = toIso(cell(row, "Not before"), `Tasks row ${line}, Not before`, options);
+      if (notBefore) node.notBefore = notBefore;
+    }
     nodes.push(node);
     rowOf.set(id, row);
     pending.push({ id, line, dependsOn: text(cell(row, "Depends on")) });
@@ -265,8 +280,13 @@ export function sheetsForProject(project: Project, base: Workbook | undefined, o
       Labels: node.labels.join("; "),
       Description: node.description,
       Links: node.links.join("\n"),
-      Starts: { value: times ? new Date(times.start) : null, style: "computedDate" },
-      Completes: { value: times ? new Date(times.completion) : (sched.errors[node.id] ?? null), style: "computedDate" },
+      Reference: node.ref ? formatReference(node.ref.storage) : "",
+      // A reference's dates come from the other project, which only the app can read.
+      Starts: { value: times && !node.ref ? new Date(times.start) : null, style: "computedDate" },
+      Completes: {
+        value: node.ref ? "(from the other project)" : times ? new Date(times.completion) : (sched.errors[node.id] ?? null),
+        style: "computedDate",
+      },
     };
     const old = previous?.rowOf.get(node.id);
     return canonical.map((c, i) => (OWN.has(c.toLowerCase()) ? (ours[c] ?? null) : (old?.[i] ?? null)));

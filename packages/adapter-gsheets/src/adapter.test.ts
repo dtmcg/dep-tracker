@@ -85,7 +85,7 @@ describe("googleSheetsAdapter", () => {
 
     const after = sheet(id, "Tasks").grid;
     const titles = after.map((r) => r[1]).filter((t) => t !== null && t !== undefined);
-    assert.deepEqual(titles, ["Title", "Public beta live", "Payments integration"]);
+    assert.deepEqual(titles, ["Title", "Public beta live", "Payments integration", "Partner API"]);
     assert.equal(after[1]![after[0]!.indexOf("Owner")], "Aoife");
     assert.equal(sheet(id, "Notes").grid[0]![0], "keep me");
   });

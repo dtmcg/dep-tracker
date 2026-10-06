@@ -48,7 +48,7 @@ test.describe("S7: Excel workbooks", () => {
     await expect(bar(page, "Public beta live").getByTestId("completion")).toHaveAttribute("datetime", "2026-11-04T09:00:00.000Z");
     const wb = await sheets(file);
     expect(wb.map((s) => s.name)).toEqual(["Project", "Tasks", "Labels"]);
-    expect(wb[1]!.rows[0]).toEqual(["ID", "Title", "Work time", "Not before", "Depends on", "Labels", "Description", "Links", "Starts", "Completes"]);
+    expect(wb[1]!.rows[0]).toEqual(["ID", "Title", "Work time", "Not before", "Depends on", "Labels", "Description", "Links", "Reference", "Starts", "Completes"]);
   });
 
   test("open a workbook written by hand; its extra columns and sheets survive a save", async ({ page }) => {

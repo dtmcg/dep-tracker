@@ -1,5 +1,6 @@
 import { parseDuration } from "./duration.ts";
-import type { Dependency, Project, ProjectNode } from "./model.ts";
+import type { Dependency, Project, ProjectNode, StorageDescriptor } from "./model.ts";
+import { STORAGE_KINDS } from "./reference.ts";
 
 export type NodeChanges = Partial<Omit<ProjectNode, "id" | "notBefore">> & { notBefore?: string | null };
 
@@ -19,17 +20,39 @@ export class CommandError extends Error {
   }
 }
 
+const FROM_OTHER_PROJECT = "A reference takes its time from the other project, so its work time and not-before date can't be set here";
+
+function validReference(node: ProjectNode): ProjectNode {
+  const storage = node.ref!.storage;
+  const kind = String(storage?.kind ?? "");
+  const path = String(storage?.path ?? "").trim();
+  if (!(STORAGE_KINDS as readonly string[]).includes(kind)) {
+    throw new CommandError(`A reference can't point at a "${kind}" project; use one of ${STORAGE_KINDS.join(", ")}`);
+  }
+  if (!path) throw new CommandError("A reference needs the location of the other project");
+  const { notBefore: _ignored, ...rest } = node;
+  return {
+    ...rest,
+    workTime: "0m",
+    ref: { storage: { kind, path } as StorageDescriptor },
+  };
+}
+
 function validNode(node: ProjectNode): ProjectNode {
   const title = node.title.trim();
   if (!node.id) throw new CommandError("A node needs an id");
   if (!title) throw new CommandError("A node needs a title");
-  try {
-    parseDuration(node.workTime);
-  } catch (error) {
-    throw new CommandError((error as Error).message);
-  }
-  if (node.notBefore !== undefined && Number.isNaN(Date.parse(node.notBefore))) {
-    throw new CommandError(`"${node.notBefore}" is not a valid not-before date-time`);
+  if (node.ref) {
+    node = validReference(node);
+  } else {
+    try {
+      parseDuration(node.workTime);
+    } catch (error) {
+      throw new CommandError((error as Error).message);
+    }
+    if (node.notBefore !== undefined && Number.isNaN(Date.parse(node.notBefore))) {
+      throw new CommandError(`"${node.notBefore}" is not a valid not-before date-time`);
+    }
   }
   const clean: ProjectNode = {
     ...node,
@@ -59,6 +82,12 @@ function apply(project: Project, command: Command): Project {
     }
     case "updateNode": {
       const current = findNode(project, command.id);
+      if (current.ref && (command.changes.workTime !== undefined || command.changes.notBefore !== undefined)) {
+        throw new CommandError(FROM_OTHER_PROJECT);
+      }
+      if (!current.ref && command.changes.ref !== undefined) {
+        throw new CommandError("A reference can only be added as a new node");
+      }
       const { notBefore, ...rest } = command.changes;
       const merged: ProjectNode = { ...current, ...rest, id: current.id };
       if (notBefore === null) delete merged.notBefore;
@@ -77,7 +106,9 @@ function apply(project: Project, command: Command): Project {
     }
     case "addEdge": {
       const edge: Dependency = { dependentId: command.dependentId, dependencyId: command.dependencyId };
-      findNode(project, edge.dependentId);
+      if (findNode(project, edge.dependentId).ref) {
+        throw new CommandError("A reference takes its time from the other project, so it can't depend on anything here");
+      }
       findNode(project, edge.dependencyId);
       if (project.edges.some((e) => sameEdge(e, edge))) throw new CommandError("That dependency already exists");
       return { ...project, edges: [...project.edges, edge] };

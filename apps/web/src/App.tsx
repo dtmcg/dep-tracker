@@ -14,7 +14,7 @@ export function App() {
         <strong>dep-tracker</strong> Project dependency manager
       </div>
       {opened ? (
-        <OpenProject key={opened.project.id} api={api} opened={opened} onClose={() => setOpened(null)} />
+        <OpenProject key={opened.project.id} api={api} opened={opened} onClose={() => setOpened(null)} onOpened={setOpened} />
       ) : (
         <StartScreen api={api} onOpened={setOpened} />
       )}
@@ -22,7 +22,17 @@ export function App() {
   );
 }
 
-function OpenProject({ api, opened, onClose }: { api: ReturnType<typeof createApi>; opened: OpenedProject; onClose: () => void }) {
+function OpenProject({
+  api,
+  opened,
+  onClose,
+  onOpened,
+}: {
+  api: ReturnType<typeof createApi>;
+  opened: OpenedProject;
+  onClose: () => void;
+  onOpened: (project: OpenedProject) => void;
+}) {
   const session = useProjectSession(api, opened, onClose);
-  return <ProjectView session={session} />;
+  return <ProjectView session={session} onOpenReference={async (storage) => onOpened(await api.openProject(storage))} />;
 }

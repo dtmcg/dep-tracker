@@ -46,10 +46,20 @@ export function richProject(): Project {
         links: [],
       },
       { id: "n03", title: "API contract agreed", workTime: "4h", labels: [], description: "Signed off by both teams", links: [] },
+      {
+        id: "n05",
+        title: "Partner API",
+        workTime: "0m",
+        labels: ["team:partner"],
+        description: "Delivered by the partner team's own plan",
+        links: [],
+        ref: { storage: { kind: "excel", path: "C:\\plans\\partner, v2.xlsx" } },
+      },
     ],
     edges: [
       { dependentId: "n01", dependencyId: "n02" },
       { dependentId: "n02", dependencyId: "n03" },
+      { dependentId: "n01", dependencyId: "n05" },
     ],
     labelColours: { risk: "#cc0000", "team:web": "#0b7f73" },
   };

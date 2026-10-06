@@ -1,8 +1,12 @@
-import type { Command, LoadedProject, Schedule, StorageDescriptor } from "@dep-tracker/domain";
+import type { Command, ExternalTime, LoadedProject, Schedule, StorageDescriptor } from "@dep-tracker/domain";
 
 export interface OpenedProject extends LoadedProject {
   storage: StorageDescriptor;
   schedule: Schedule;
+  /** Completion of each reference node, as worked out by the server. */
+  externals?: Record<string, ExternalTime>;
+  /** Changes when a project this one references changes on disk. */
+  referencesVersion?: string;
 }
 
 export interface NewProject {
@@ -50,7 +54,7 @@ export function createApi(token: string, fetchFn: typeof fetch = (...args) => fe
     getProject: (id: string) => request<OpenedProject>(projectUrl(id)),
     sendCommands: (id: string, expectedVersion: string, commands: Command[]) =>
       post<OpenedProject>(`${projectUrl(id)}/commands`, { expectedVersion, commands }),
-    version: async (id: string) => (await request<{ version: string }>(`${projectUrl(id)}/version`)).version,
+    version: (id: string) => request<{ version: string; referencesVersion?: string }>(`${projectUrl(id)}/version`),
     importProject: (source: StorageDescriptor, target: StorageDescriptor) =>
       post<OpenedProject>("/api/projects/import", { source, target }),
     googleStatus: () => request<{ configured: boolean; connected: boolean }>("/api/auth/google/status"),

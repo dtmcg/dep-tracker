@@ -69,11 +69,11 @@ describe("excelAdapter: documented layout (S7)", () => {
     const wb = readWorkbook(await readFile(file));
     assert.deepEqual(wb.sheets.map((s) => s.name), ["Project", "Tasks", "Labels"]);
     assert.deepEqual(wb.sheets[1]!.rows[0], [...TASK_COLUMNS]);
-    assert.deepEqual(TASK_COLUMNS, ["ID", "Title", "Work time", "Not before", "Depends on", "Labels", "Description", "Links", "Starts", "Completes"]);
+    assert.deepEqual(TASK_COLUMNS, ["ID", "Title", "Work time", "Not before", "Depends on", "Labels", "Description", "Links", "Reference", "Starts", "Completes"]);
     const row = wb.sheets[1]!.rows[1]!;
     assert.equal(row[1], "Public beta live");
     // Computed columns are filled in for people reading the sheet
-    assert.deepEqual(row[9], new Date(Date.parse("2026-11-04T09:00:00Z")));
+    assert.deepEqual(row[10], new Date(Date.parse("2026-11-04T09:00:00Z")));
     const projectSheet = Object.fromEntries(wb.sheets[0]!.rows.slice(1).map((r) => [r[0], r[1]]));
     assert.equal(projectSheet["Name"], "Mobile relaunch");
     assert.equal(projectSheet["Success criteria"], "Public beta live");

@@ -4,11 +4,13 @@ import path from "node:path";
 import {
   type Dependency,
   type LoadedProject,
+  parseReference,
   type Project,
   ProjectExistsError,
   type ProjectNode,
   type StorageAdapter,
   VersionConflictError,
+  formatReference,
 } from "@dep-tracker/domain";
 import { readRecords, readTable, stringifyCsv } from "./csv.ts";
 
@@ -29,7 +31,7 @@ export class CsvAdapterError extends Error {
 const FILES = { project: "project.csv", nodes: "nodes.csv", edges: "edges.csv", labels: "labels.csv" } as const;
 type FileTexts = Record<keyof typeof FILES, string>;
 
-const NODE_COLUMNS = ["id", "title", "work_time", "not_before", "labels", "description", "links"] as const;
+const NODE_COLUMNS = ["id", "title", "work_time", "not_before", "labels", "description", "links", "reference"] as const;
 
 async function readText(folder: string, name: string, required: boolean): Promise<string> {
   const file = path.join(folder, name);
@@ -98,6 +100,7 @@ function parseProject(texts: FileTexts): Project {
       "labels",
       "description",
       "links",
+      "reference",
     ]).records.map(({ line, values }) => {
       const id = values.id ?? "";
       if (!id) throw new CsvAdapterError(`${FILES.nodes} line ${line}: id is empty`);
@@ -111,7 +114,17 @@ function parseProject(texts: FileTexts): Project {
         description: values.description ?? "",
         links: splitList(values.links ?? ""),
       };
-      if (values.not_before) node.notBefore = toIso(values.not_before, `${FILES.nodes} line ${line}, not_before`);
+      if (values.reference) {
+        // A reference stands in for another project's success criteria; its time comes from there.
+        try {
+          node.ref = { storage: parseReference(values.reference) };
+        } catch (error) {
+          throw new CsvAdapterError(`${FILES.nodes} line ${line}, reference: ${(error as Error).message}`);
+        }
+        node.workTime = "0m";
+      } else if (values.not_before) {
+        node.notBefore = toIso(values.not_before, `${FILES.nodes} line ${line}, not_before`);
+      }
       return node;
     });
 
@@ -180,6 +193,7 @@ function serialise(project: Project, previousNodes: string): FileTexts {
       labels: node.labels.join(";"),
       description: node.description,
       links: node.links.join(";"),
+      reference: node.ref ? formatReference(node.ref.storage) : "",
     };
     const extras = byId.get(node.id);
     return header.map((column) => ours[column] ?? extras?.get(column) ?? "");
