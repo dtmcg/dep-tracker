@@ -364,3 +364,5 @@ input.mono { font-size: 13px; }
 .bar-row[data-view="nodes"][data-root="true"] .node-title,
 .bar-row[data-view="nodes"][data-root="true"] .node-sub { color: var(--accent-ink); }
 .bar-row[data-view="nodes"] .bar-button { border-radius: 12px; }
+.scale-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 13px; cursor: pointer; }
+.scale-toggle input { width: auto; margin: 0; }

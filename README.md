@@ -175,3 +175,5 @@ Time runs left to right. Vertically the chart is balanced like a tree: each node
 ## Time line view and node view
 
 The chart has two views, switched from the toolbar above it (the choice is remembered). **Time line view** is the original: a bar per node, as long as its work time. **Node view** draws the same data as simple rounded boxes of one size, each showing the title and completion date and ending at the point on the time axis where the node is estimated to complete. Selection highlighting, animated edges, label colours, zoom, cycle and reference markers and the details panel work the same in both.
+
+In node view a **Time scale** checkbox appears in the toolbar. Untick it to even the layout out: boxes sit in equally spaced columns by dependency depth (leaves on the left, the success criteria on the right) instead of at their completion dates, and the time axis, zoom controls and Today marker are hidden. Tick it again to return to the time axis. The checkbox is not shown in time line view, and the choice is remembered.

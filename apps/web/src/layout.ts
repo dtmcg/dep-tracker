@@ -11,6 +11,8 @@ export const NODE_WIDTH = 176;
 export const NODE_HEIGHT = 46;
 export const NODE_ROW_HEIGHT = 60;
 const NODE_GAP = 8;
+/** Node view without a time scale: boxes sit in columns by dependency depth, this far apart (room for connectors). */
+export const COLUMN_GAP = 64;
 const PAD_MS = DAY_MS / 2;
 const EDGE_STUB = 8;
 /** Bars may touch end to start on a row (a dependency feeding straight into its dependent); the first one's label is shortened to fit. */
@@ -48,6 +50,8 @@ export interface GanttLayout {
   barHeight: number;
   /** Pixels added to every time position so boxes that end at a time can start left of it (node view; 0 otherwise). */
   axisOffset: number;
+  /** False when boxes are spaced evenly by dependency depth instead of by time: there is no time axis to draw. */
+  timeScaled: boolean;
   origin: number;
   /** Time covered, origin to end, in ms (independent of zoom). */
   spanMs: number;
@@ -64,12 +68,14 @@ const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 export function layoutGantt(
   project: Project,
   sched: Schedule,
-  { pxPerDay, view = "timeline" }: { pxPerDay: number; view?: ViewMode },
+  { pxPerDay, view = "timeline", timeScale = true }: { pxPerDay: number; view?: ViewMode; timeScale?: boolean },
 ): GanttLayout {
   const nodesView = view === "nodes";
+  // Node view with the time scale off: columns by dependency depth, every step the same width.
+  const even = nodesView && !timeScale;
   const ROW_H = nodesView ? NODE_ROW_HEIGHT : ROW_HEIGHT;
   const BAR_H = nodesView ? NODE_HEIGHT : BAR_HEIGHT;
-  const axisOffset = nodesView ? NODE_WIDTH : 0;
+  const axisOffset = nodesView && !even ? NODE_WIDTH : 0;
   const ids = project.nodes.map((n) => n.id).sort(byId);
   const timed = (id: string) => sched.nodes[id] !== undefined;
   const startOf = (id: string) => Date.parse(sched.nodes[id]!.start);
@@ -102,7 +108,20 @@ export function layoutGantt(
   // bar it would overlap in time, so a node is moved to the nearest free row.
   // Time line: a bar spans its work, and may touch the next one. Node view: a fixed box ending at the completion
   // time, with a small gap to its neighbours.
-  const xOf = (id: string) => (nodesView ? px(endOf(id) - origin) : px(startOf(id) - origin));
+  // Even spacing: a node's column is the longest chain of dependencies beneath it, so every dependency is to its left.
+  const depths = new Map<string, number>();
+  const depthOf = (id: string, path: Set<string>): number => {
+    const known = depths.get(id);
+    if (known !== undefined) return known;
+    if (path.has(id)) return 0;
+    path.add(id);
+    const d = deps.get(id)!.filter(timed).reduce((most, k) => Math.max(most, depthOf(k, path) + 1), 0);
+    path.delete(id);
+    depths.set(id, d);
+    return d;
+  };
+  const columnX = (id: string) => depthOf(id, new Set()) * (NODE_WIDTH + COLUMN_GAP);
+  const xOf = (id: string) => (even ? columnX(id) : nodesView ? px(endOf(id) - origin) : px(startOf(id) - origin));
   const wOf = (id: string) => (nodesView ? NODE_WIDTH : Math.max(px(endOf(id) - startOf(id)), 2));
   const reach = (id: string) => xOf(id) + wOf(id) + (nodesView ? NODE_GAP : -TOUCH_TOLERANCE);
   const taken = new Map<number, string[]>();
@@ -156,7 +175,7 @@ export function layoutGantt(
     ...timedIds.map((id) => ({
       id,
       row: rowOf.get(id)! - top,
-      x: nodesView ? axisOffset + xOf(id) - NODE_WIDTH : xOf(id),
+      x: even ? xOf(id) : nodesView ? axisOffset + xOf(id) - NODE_WIDTH : xOf(id),
       width: nodesView ? NODE_WIDTH : px(endOf(id) - startOf(id)),
       timed: true,
       labelMax: labelMax(id),
@@ -164,7 +183,7 @@ export function layoutGantt(
     ...untimedIds.map((id, i) => ({
       id,
       row: rows + i,
-      x: nodesView ? px(PAD_MS) : px(PAD_MS),
+      x: even ? NODE_GAP : px(PAD_MS),
       width: nodesView ? NODE_WIDTH : px(DAY_MS),
       timed: false,
       labelMax: null,
@@ -230,13 +249,15 @@ export function layoutGantt(
       return [{ dependentId: e.dependentId, dependencyId: e.dependencyId, points }];
     });
 
+  const evenWidth = timedIds.length ? Math.max(...timedIds.map((id) => xOf(id))) + NODE_WIDTH : NODE_WIDTH;
   return {
     rowHeight: ROW_H,
     barHeight: BAR_H,
     axisOffset,
+    timeScaled: !even,
     origin,
     spanMs: end - origin,
-    width: axisOffset + px(end - origin),
+    width: even ? evenWidth : axisOffset + px(end - origin),
     height: (rows + untimedIds.length) * ROW_H,
     bars,
     edges,

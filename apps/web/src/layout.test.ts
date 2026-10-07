@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { type Project, schedule } from "@dep-tracker/domain";
-import { BAR_HEIGHT, fitPxPerDay, layoutGantt, ROW_HEIGHT, timeTicks, ZOOM_LEVELS } from "./layout.ts";
+import { BAR_HEIGHT, COLUMN_GAP, fitPxPerDay, layoutGantt, ROW_HEIGHT, timeTicks, ZOOM_LEVELS } from "./layout.ts";
 
 const DAY = 86_400_000;
 
@@ -251,6 +251,44 @@ describe("node view layout", () => {
     }
     // Nothing is cut off at the left edge
     assert.ok(Math.min(...l.bars.map((b) => b.x)) >= 0);
+  });
+
+  it("with the time scale off, spaces boxes evenly in columns by dependency depth", () => {
+    const p = proj();
+    const l = layoutGantt(p, schedule(p), { pxPerDay: 100, view: "nodes", timeScale: false });
+    const x = (id: string) => l.bars.find((b) => b.id === id)!.x;
+    assert.equal(l.timeScaled, false);
+    assert.equal(l.axisOffset, 0);
+    // c, d and a are leaves; b is one step up, the root two. Work time and dates no longer matter.
+    assert.equal(x("c"), x("d"));
+    assert.equal(x("c"), x("a"));
+    assert.equal(x("b") - x("c"), x("r") - x("b"));
+    assert.ok(x("b") - x("c") >= l.bars[0]!.width + COLUMN_GAP - 1e-9);
+    assert.equal(l.width, x("r") + l.bars[0]!.width);
+    // and every edge runs left to right with room between
+    for (const e of l.edges) assert.ok(e.points.at(-1)![0] > e.points[0]![0]);
+  });
+
+  it("with the time scale off, is the same whatever the zoom", () => {
+    const p = proj();
+    assert.deepEqual(
+      layoutGantt(p, schedule(p), { pxPerDay: 6, view: "nodes", timeScale: false }),
+      layoutGantt(p, schedule(p), { pxPerDay: 960, view: "nodes", timeScale: false }),
+    );
+  });
+
+  it("puts a node past a longer chain further right, even if it completes earlier", () => {
+    const p = proj();
+    p.edges.push({ dependentId: "r", dependencyId: "c" });
+    const l = layoutGantt(p, schedule(p), { pxPerDay: 100, view: "nodes", timeScale: false });
+    const x = (id: string) => l.bars.find((b) => b.id === id)!.x;
+    assert.ok(x("r") > x("b") && x("b") > x("c"));
+  });
+
+  it("has the time scale on unless told otherwise", () => {
+    const p = proj();
+    assert.equal(layoutGantt(p, schedule(p), { pxPerDay: 100, view: "nodes" }).timeScaled, true);
+    assert.equal(layoutGantt(p, schedule(p), { pxPerDay: 100 }).timeScaled, true);
   });
 
   it("keeps the time-line view as it was", () => {

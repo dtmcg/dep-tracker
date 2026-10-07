@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_VIEW, loadView, saveView, VIEWS } from "./viewMode.ts";
+import { DEFAULT_VIEW, loadTimeScale, loadView, saveTimeScale, saveView, VIEWS } from "./viewMode.ts";
 
 const memory = (initial: Record<string, string> = {}) => {
   const data = { ...initial };
@@ -39,5 +39,25 @@ describe("view mode", () => {
     };
     assert.equal(loadView(blocked), "timeline");
     assert.doesNotThrow(() => saveView(blocked, "nodes"));
+  });
+});
+
+describe("time scale", () => {
+  it("is on until switched off", () => {
+    assert.equal(loadTimeScale(memory()), true);
+  });
+
+  it("remembers the choice", () => {
+    const store = memory();
+    saveTimeScale(store, false);
+    assert.equal(loadTimeScale(store), false);
+    saveTimeScale(store, true);
+    assert.equal(loadTimeScale(store), true);
+  });
+
+  it("copes with storage that throws", () => {
+    const broken = { getItem: () => { throw new Error("no"); }, setItem: () => { throw new Error("no"); } };
+    assert.equal(loadTimeScale(broken), true);
+    assert.doesNotThrow(() => saveTimeScale(broken, false));
   });
 });

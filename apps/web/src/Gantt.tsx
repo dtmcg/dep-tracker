@@ -4,7 +4,7 @@ import { dashSeconds } from "./animation.ts";
 import { formatDateTime } from "./format.ts";
 import { activeLabels as labelsOn, labelColour } from "./labels.ts";
 import { DAY_MS, fitPxPerDay, layoutGantt, NODE_WIDTH, timeTicks, ZOOM_LEVELS } from "./layout.ts";
-import { loadView, saveView, VIEWS, type ViewMode } from "./viewMode.ts";
+import { loadTimeScale, loadView, saveTimeScale, saveView, VIEWS, type ViewMode } from "./viewMode.ts";
 
 /** Room to the right of the last bar for its title and date. */
 const LABEL_SPACE = 320;
@@ -38,8 +38,14 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
     setViewState(next);
     saveView(window.localStorage, next);
   };
+  const [timeScale, setTimeScaleState] = useState(() => loadTimeScale(window.localStorage));
+  const setTimeScale = (next: boolean) => {
+    setTimeScaleState(next);
+    saveTimeScale(window.localStorage, next);
+  };
   const nodesView = view === "nodes";
-  const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay, view }), [project, schedule, pxPerDay, view]);
+  const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay, view, timeScale }), [project, schedule, pxPerDay, view, timeScale]);
+  const scaled = layout.timeScaled;
   const ROW_HEIGHT = layout.rowHeight;
   const BAR_HEIGHT = layout.barHeight;
   // Room to leave to the right of the last bar or box: its label, or (node view) the connector.
@@ -124,10 +130,10 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
 
   const now = Date.now();
   const todayX = xOf(now);
-  const showToday = todayX >= 0 && todayX <= layout.width;
+  const showToday = scaled && todayX >= 0 && todayX <= layout.width;
   const ticks = useMemo(
-    () => timeTicks(layout.origin, layout.origin + (layout.width / pxPerDay) * DAY_MS, pxPerDay),
-    [layout.origin, layout.width, pxPerDay],
+    () => (scaled ? timeTicks(layout.origin, layout.origin + (layout.width / pxPerDay) * DAY_MS, pxPerDay) : []),
+    [scaled, layout.origin, layout.width, pxPerDay],
   );
 
   // Ctrl/Cmd + wheel zooms around the pointer.
@@ -216,6 +222,14 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
             </button>
           ))}
         </div>
+        {nodesView && (
+          <label className="scale-toggle">
+            <input type="checkbox" checked={timeScale} onChange={(e) => setTimeScale(e.target.checked)} />
+            Time scale
+          </label>
+        )}
+        {scaled && (
+          <>
         <button className="ghost small" aria-label="Zoom out" onClick={() => zoomTo(zoomIndex + 1)} disabled={zoomIndex >= ZOOM_LEVELS.length - 1}>
           −
         </button>
@@ -239,10 +253,12 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
         <button className="ghost small" onClick={scrollToToday} disabled={!showToday}>
           Today
         </button>
+          </>
+        )}
       </div>
 
       <div className="gantt-scroll" ref={scroller} role="group" aria-label="Timeline" onPointerDown={onPointerDown}>
-        <div className="gantt-axis" style={{ width, height: AXIS_HEIGHT }} aria-hidden="true">
+        <div className="gantt-axis" style={{ width, height: scaled ? AXIS_HEIGHT : 8 }} aria-hidden="true">
           {ticks.map((t) => (
             <span key={t.ms} className="tick" style={{ left: xOf(t.ms) }}>
               {t.label}

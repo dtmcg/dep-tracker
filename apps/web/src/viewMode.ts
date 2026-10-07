@@ -28,3 +28,22 @@ export function saveView(storage: ViewStorage, view: ViewMode): void {
     // The choice just won't outlast this tab.
   }
 }
+
+const SCALE_KEY = "dep-tracker.timescale";
+
+/** Node view only: whether boxes sit where they complete on the time line (the default) or are spaced evenly by dependency depth. */
+export function loadTimeScale(storage: ViewStorage): boolean {
+  try {
+    return storage.getItem(SCALE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function saveTimeScale(storage: ViewStorage, on: boolean): void {
+  try {
+    storage.setItem(SCALE_KEY, on ? "on" : "off");
+  } catch {
+    // The choice just won't outlast this tab.
+  }
+}
