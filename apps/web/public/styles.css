@@ -340,3 +340,27 @@ input.mono { font-size: 13px; }
   font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
 }
 .bar-row[data-root="true"] .bar-inner { color: var(--accent-ink); }
+
+/* View switch (time line / node view) */
+.view-switch { display: inline-flex; gap: 2px; padding: 2px; margin-right: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.view-switch button { border: 0; }
+.view-switch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Node view: uniform rounded boxes holding the title and completion date. The state rules above (root, cycle,
+   not scheduled, ...) keep their colours; :where() keeps this base rule from overriding them. */
+:where(.bar-row[data-view="nodes"]) .bar {
+  display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 12px; overflow: hidden;
+  border-radius: 12px; background: var(--surface); border: 1.5px solid color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.bar-row[data-view="nodes"][data-unestimated="true"] .bar,
+.bar-row[data-view="nodes"][data-state="blocked"] .bar,
+.bar-row[data-view="nodes"][data-state="blocked-reference"] .bar,
+.bar-row[data-view="nodes"][data-timed="false"] .bar,
+.bar-row[data-view="nodes"][data-reference="true"] .bar { background: var(--surface); }
+.bar-row[data-view="nodes"][data-reference="true"] .bar { border-radius: 999px; padding: 0 18px; }
+.node-title { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-sub { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-quiet); white-space: nowrap; overflow: hidden; }
+.node-sub time { color: inherit; font-size: inherit; }
+.bar-row[data-view="nodes"][data-root="true"] .node-title,
+.bar-row[data-view="nodes"][data-root="true"] .node-sub { color: var(--accent-ink); }
+.bar-row[data-view="nodes"] .bar-button { border-radius: 12px; }

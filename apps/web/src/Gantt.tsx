@@ -3,7 +3,8 @@ import { criticalEdges, dependenciesOf, dependentsOf, parseDuration, type Projec
 import { dashSeconds } from "./animation.ts";
 import { formatDateTime } from "./format.ts";
 import { activeLabels as labelsOn, labelColour } from "./labels.ts";
-import { BAR_HEIGHT, DAY_MS, fitPxPerDay, layoutGantt, ROW_HEIGHT, timeTicks, ZOOM_LEVELS } from "./layout.ts";
+import { DAY_MS, fitPxPerDay, layoutGantt, NODE_WIDTH, timeTicks, ZOOM_LEVELS } from "./layout.ts";
+import { loadView, saveView, VIEWS, type ViewMode } from "./viewMode.ts";
 
 /** Room to the right of the last bar for its title and date. */
 const LABEL_SPACE = 320;
@@ -32,7 +33,17 @@ function nearestZoom(pxPerDay: number): ZoomName {
 export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, onConnect }: GanttProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [pxPerDay, setPxPerDay] = useState<number>(ZOOM_LEVELS[1].pxPerDay);
-  const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay }), [project, schedule, pxPerDay]);
+  const [view, setViewState] = useState<ViewMode>(() => loadView(window.localStorage));
+  const setView = (next: ViewMode) => {
+    setViewState(next);
+    saveView(window.localStorage, next);
+  };
+  const nodesView = view === "nodes";
+  const layout = useMemo(() => layoutGantt(project, schedule, { pxPerDay, view }), [project, schedule, pxPerDay, view]);
+  const ROW_HEIGHT = layout.rowHeight;
+  const BAR_HEIGHT = layout.barHeight;
+  // Room to leave to the right of the last bar or box: its label, or (node view) the connector.
+  const reserve = nodesView ? 24 : LABEL_SPACE;
   const titleOf = useMemo(() => new Map(project.nodes.map((n) => [n.id, n.title])), [project.nodes]);
   const nodeOf = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
   // Selection: dependencies upstream, dependents downstream, the rest dimmed (FR-14, FR-16).
@@ -72,7 +83,14 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
             : schedule.nodes[id]
               ? "ok"
               : "error";
-  const xOf = useCallback((ms: number) => ((ms - layout.origin) / DAY_MS) * pxPerDay, [layout.origin, pxPerDay]);
+  const noteFor = (id: string) =>
+    ({
+      cyclic: "cycle",
+      blocked: "blocked by a cycle",
+      unresolved: "other project can't be read",
+      "blocked-reference": "waiting on another project",
+    })[stateOf(id) as string] ?? "can't schedule";
+  const xOf = useCallback((ms: number) => layout.axisOffset + ((ms - layout.origin) / DAY_MS) * pxPerDay, [layout.origin, layout.axisOffset, pxPerDay]);
 
   // "Fit" keeps the whole plan in view as nodes are added or the window changes, until you zoom by hand.
   const [fitMode, setFitMode] = useState(true);
@@ -86,12 +104,12 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
-    if (fitMode && viewWidth > 0) setPxPerDay(Math.max(0.5, fitPxPerDay(layout.spanMs, Math.max(200, viewWidth - LABEL_SPACE - 8))));
-  }, [fitMode, viewWidth, layout.spanMs]);
+    if (fitMode && viewWidth > 0) setPxPerDay(Math.max(0.5, fitPxPerDay(layout.spanMs, Math.max(200, viewWidth - reserve - layout.axisOffset - 8))));
+  }, [fitMode, viewWidth, layout.spanMs, layout.axisOffset, reserve]);
   const fit = () => {
     setFitMode(true);
     const el = scroller.current;
-    if (el) setPxPerDay(Math.max(0.5, fitPxPerDay(layout.spanMs, Math.max(200, el.clientWidth - LABEL_SPACE - 8))));
+    if (el) setPxPerDay(Math.max(0.5, fitPxPerDay(layout.spanMs, Math.max(200, el.clientWidth - reserve - layout.axisOffset - 8))));
   };
   const setZoom = (value: number | ((p: number) => number)) => {
     setFitMode(false);
@@ -185,12 +203,19 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
     if (el && showToday) el.scrollLeft = Math.max(0, todayX - el.clientWidth / 2);
   };
 
-  const width = layout.width + LABEL_SPACE;
+  const width = layout.width + reserve;
   const barTop = (row: number) => row * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2;
 
   return (
     <div className="gantt">
       <div className="gantt-toolbar" role="toolbar" aria-label="Timeline controls">
+        <div className="view-switch" role="group" aria-label="View">
+          {VIEWS.map((v) => (
+            <button key={v.id} className="ghost small" aria-pressed={view === v.id} onClick={() => setView(v.id)}>
+              {v.name}
+            </button>
+          ))}
+        </div>
         <button className="ghost small" aria-label="Zoom out" onClick={() => zoomTo(zoomIndex + 1)} disabled={zoomIndex >= ZOOM_LEVELS.length - 1}>
           −
         </button>
@@ -288,12 +313,13 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                 data-highlight={barHighlight(b.id)}
                 data-labels-active={on.length ? on.join(" ") : undefined}
                 data-timed={b.timed}
+                data-view={view}
                 data-reference={node.ref ? "true" : undefined}
                 data-unestimated={schedule.flags[b.id]?.includes("unestimated") ? "true" : undefined}
                 data-state={stateOf(b.id)}
                 data-orphan={schedule.flags[b.id]?.includes("orphan") ? "true" : undefined}
                 className="bar-row"
-                style={{ left: b.x, top: barTop(b.row), height: BAR_HEIGHT}}
+                style={{ left: b.x, top: barTop(b.row), height: BAR_HEIGHT }}
               >
                 <button
                   className="bar-button"
@@ -303,11 +329,38 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                   onClick={() => onSelect(selectedId === b.id ? null : b.id)}
                 >
                   <span className="bar" data-testid="bar" style={{ width: Math.max(b.width, 2), boxShadow: rings || undefined }}>
-                    {/* When the next bar on the row leaves no room for the label, the title goes inside the bar. */}
-                    {b.labelMax !== null && b.labelMax < SQUEEZED_LABEL && b.width >= 40 && (
-                      <span className="bar-inner" aria-hidden="true">
-                        {node.title}
-                      </span>
+                    {nodesView ? (
+                      <>
+                        <span className="node-title">{node.title}</span>
+                        <span className="node-sub">
+                          {times ? (
+                            <time data-testid="completion" dateTime={times.completion}>
+                              {formatDateTime(times.completion)}
+                            </time>
+                          ) : (
+                            <span className="bar-note">{noteFor(b.id)}</span>
+                          )}
+                          {on.map((label) => (
+                            <span
+                              key={label}
+                              className="label-chip"
+                              data-testid="active-label"
+                              style={{ "--label-colour": labelColour(project, label) } as CSSProperties}
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </span>
+                      </>
+                    ) : (
+                      /* When the next bar on the row leaves no room for the label, the title goes inside the bar. */
+                      b.labelMax !== null &&
+                      b.labelMax < SQUEEZED_LABEL &&
+                      b.width >= 40 && (
+                        <span className="bar-inner" aria-hidden="true">
+                          {node.title}
+                        </span>
+                      )
                     )}
                   </span>
                   {/* Inside the button, so a click here still selects; a drag from it connects (FR-10). */}
@@ -318,6 +371,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                     style={{ left: Math.max(b.width, 2) - 5 }}
                     title="Drag onto another bar to make it depend on this one"
                   />
+                  {!nodesView && (
                   <span className="bar-label" style={b.labelMax === null ? undefined : { maxWidth: b.labelMax }}>
                     <span className="bar-title">{node.title}</span>
                     {times ? (
@@ -325,14 +379,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                         {formatDateTime(times.completion)}
                       </time>
                     ) : (
-                      <span className="bar-note">
-                        {{
-                          cyclic: "cycle",
-                          blocked: "blocked by a cycle",
-                          unresolved: "other project can't be read",
-                          "blocked-reference": "waiting on another project",
-                        }[stateOf(b.id) as string] ?? "can't schedule"}
-                      </span>
+                      <span className="bar-note">{noteFor(b.id)}</span>
                     )}
                     {node.ref && <span className="bar-badge reference-badge">other project</span>}
                     {schedule.flags[b.id]?.includes("unestimated") && <span className="bar-badge unestimated-badge">no work time</span>}
@@ -348,6 +395,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                       </span>
                     ))}
                   </span>
+                  )}
                 </button>
               </article>
             );

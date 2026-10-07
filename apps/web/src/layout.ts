@@ -1,10 +1,16 @@
 import type { Project, Schedule } from "@dep-tracker/domain";
+import type { ViewMode } from "./viewMode.ts";
 
 /** Layout of the graph-based Gantt chart: pure and deterministic (NFR-9). */
 
 export const DAY_MS = 86_400_000;
 export const ROW_HEIGHT = 40;
 export const BAR_HEIGHT = 26;
+/** Node view: every node is a box of this size, wherever it sits and however long its work takes. */
+export const NODE_WIDTH = 176;
+export const NODE_HEIGHT = 46;
+export const NODE_ROW_HEIGHT = 60;
+const NODE_GAP = 8;
 const PAD_MS = DAY_MS / 2;
 const EDGE_STUB = 8;
 /** Bars may touch end to start on a row (a dependency feeding straight into its dependent); the first one's label is shortened to fit. */
@@ -37,6 +43,11 @@ export interface Edge {
 }
 
 export interface GanttLayout {
+  /** Height of one row, and of a bar or node box in it. */
+  rowHeight: number;
+  barHeight: number;
+  /** Pixels added to every time position so boxes that end at a time can start left of it (node view; 0 otherwise). */
+  axisOffset: number;
   origin: number;
   /** Time covered, origin to end, in ms (independent of zoom). */
   spanMs: number;
@@ -50,7 +61,15 @@ export interface GanttLayout {
 
 const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { pxPerDay: number }): GanttLayout {
+export function layoutGantt(
+  project: Project,
+  sched: Schedule,
+  { pxPerDay, view = "timeline" }: { pxPerDay: number; view?: ViewMode },
+): GanttLayout {
+  const nodesView = view === "nodes";
+  const ROW_H = nodesView ? NODE_ROW_HEIGHT : ROW_HEIGHT;
+  const BAR_H = nodesView ? NODE_HEIGHT : BAR_HEIGHT;
+  const axisOffset = nodesView ? NODE_WIDTH : 0;
   const ids = project.nodes.map((n) => n.id).sort(byId);
   const timed = (id: string) => sched.nodes[id] !== undefined;
   const startOf = (id: string) => Date.parse(sched.nodes[id]!.start);
@@ -72,7 +91,8 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
   const starts = timedIds.map(startOf);
   const ends = timedIds.map(endOf);
   const projectStart = Date.parse(project.start);
-  const origin = (starts.length ? Math.min(...starts) : projectStart) - PAD_MS;
+  // The node view positions boxes by when they complete, so the axis starts at the earliest completion.
+  const origin = (nodesView ? (ends.length ? Math.min(...ends) : projectStart) : starts.length ? Math.min(...starts) : projectStart) - PAD_MS;
   const end = (ends.length ? Math.max(...ends) : projectStart + DAY_MS) + PAD_MS;
   const px = (ms: number) => (ms / DAY_MS) * pxPerDay;
 
@@ -80,9 +100,11 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
   // rows (so the root ends up in the middle of the chart); leaves take consecutive rows. A dependency shared
   // by several nodes is placed once, under whichever is visited first. A bar never shares a row with another
   // bar it would overlap in time, so a node is moved to the nearest free row.
-  const xOf = (id: string) => px(startOf(id) - origin);
-  const wOf = (id: string) => Math.max(px(endOf(id) - startOf(id)), 2);
-  const reach = (id: string) => xOf(id) + wOf(id) - TOUCH_TOLERANCE;
+  // Time line: a bar spans its work, and may touch the next one. Node view: a fixed box ending at the completion
+  // time, with a small gap to its neighbours.
+  const xOf = (id: string) => (nodesView ? px(endOf(id) - origin) : px(startOf(id) - origin));
+  const wOf = (id: string) => (nodesView ? NODE_WIDTH : Math.max(px(endOf(id) - startOf(id)), 2));
+  const reach = (id: string) => xOf(id) + wOf(id) + (nodesView ? NODE_GAP : -TOUCH_TOLERANCE);
   const taken = new Map<number, string[]>();
   const rowOf = new Map<string, number>();
   const fits = (id: string, row: number) =>
@@ -124,20 +146,40 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
   const rows = timedIds.length ? Math.max(...rowOf.values()) - top + 1 : 0;
 
   const labelMax = (id: string): number | null => {
+    if (nodesView) return null;
     const gaps = timedIds
       .filter((o) => o !== id && rowOf.get(o) === rowOf.get(id) && xOf(o) >= xOf(id))
       .map((o) => xOf(o) - (xOf(id) + wOf(id)) - 8);
     return gaps.length ? Math.max(0, Math.min(...gaps)) : null;
   };
   const bars: Bar[] = [
-    ...timedIds.map((id) => ({ id, row: rowOf.get(id)! - top, x: xOf(id), width: px(endOf(id) - startOf(id)), timed: true, labelMax: labelMax(id) })),
-    ...untimedIds.map((id, i) => ({ id, row: rows + i, x: px(PAD_MS), width: px(DAY_MS), timed: false, labelMax: null })),
+    ...timedIds.map((id) => ({
+      id,
+      row: rowOf.get(id)! - top,
+      x: nodesView ? axisOffset + xOf(id) - NODE_WIDTH : xOf(id),
+      width: nodesView ? NODE_WIDTH : px(endOf(id) - startOf(id)),
+      timed: true,
+      labelMax: labelMax(id),
+    })),
+    ...untimedIds.map((id, i) => ({
+      id,
+      row: rows + i,
+      x: nodesView ? px(PAD_MS) : px(PAD_MS),
+      width: nodesView ? NODE_WIDTH : px(DAY_MS),
+      timed: false,
+      labelMax: null,
+    })),
   ];
   const barOf = new Map(bars.map((b) => [b.id, b]));
-  const mid = (row: number) => row * ROW_HEIGHT + ROW_HEIGHT / 2;
+  const mid = (row: number) => row * ROW_H + ROW_H / 2;
 
-  const crossings = (x: number, fromRow: number, toRow: number) =>
-    bars.filter((b) => b.row > Math.min(fromRow, toRow) && b.row < Math.max(fromRow, toRow) && x > b.x && x < b.x + b.width).length;
+  /** Bars an edge would cut through: those on rows between, at the drop; and those on its own two rows along the runs. */
+  const crossings = (x: number, from: Bar, to: Bar) => {
+    const run = (row: number, xa: number, xb: number, skip: string[]) =>
+      bars.filter((b) => b.row === row && !skip.includes(b.id) && b.x < Math.max(xa, xb) && b.x + b.width > Math.min(xa, xb)).length;
+    const between = bars.filter((b) => b.row > Math.min(from.row, to.row) && b.row < Math.max(from.row, to.row) && x > b.x && x < b.x + b.width).length;
+    return between + run(from.row, from.x + from.width, x, [from.id, to.id]) + run(to.row, x, to.x, [from.id, to.id]);
+  };
 
   const edges: Edge[] = [...project.edges]
     .sort((a, b) => byId(a.dependencyId, b.dependencyId) || byId(a.dependentId, b.dependentId))
@@ -151,12 +193,24 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
       const y1 = mid(to.row);
       if (y0 === y1) return [{ dependentId: e.dependentId, dependencyId: e.dependencyId, points: [[x0, y0], [x1, y1]] }];
       let points: [number, number][];
-      if (x1 - x0 >= 2 * EDGE_STUB) {
+      if (nodesView && x1 - x0 < 2 * EDGE_STUB) {
+        // The dependent's box starts before the dependency's ends: leave the right side, run along the gap
+        // between rows, and come into the dependent's left side.
+        const channel = y1 > y0 ? y1 - ROW_H / 2 : y1 + ROW_H / 2;
+        points = [
+          [x0, y0],
+          [x0 + EDGE_STUB, y0],
+          [x0 + EDGE_STUB, channel],
+          [x1 - EDGE_STUB, channel],
+          [x1 - EDGE_STUB, y1],
+          [x1, y1],
+        ];
+      } else if (x1 - x0 >= 2 * EDGE_STUB) {
         // Room between the bars: drop just after the dependency ends, then run along the dependent's row,
         // which is clear to the left of its start; labels sit to the right of bars. Move the drop next to
         // the dependent instead only when that crosses fewer bars (FR-3).
         const candidates = [x0 + EDGE_STUB, x1 - EDGE_STUB];
-        const xv = candidates.reduce((best, x) => (crossings(x, from.row, to.row) < crossings(best, from.row, to.row) ? x : best));
+        const xv = candidates.reduce((best, x) => (crossings(x, from, to) < crossings(best, from, to) ? x : best));
         points = [
           [x0, y0],
           [xv, y0],
@@ -168,7 +222,7 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
         const xv = Math.max(from.x, Math.min(x0, x1) - EDGE_STUB);
         const below = y1 > y0;
         points = [
-          [xv, y0 + (below ? BAR_HEIGHT / 2 : -BAR_HEIGHT / 2)],
+          [xv, y0 + (below ? BAR_H / 2 : -BAR_H / 2)],
           [xv, y1],
           [x1, y1],
         ];
@@ -177,10 +231,13 @@ export function layoutGantt(project: Project, sched: Schedule, { pxPerDay }: { p
     });
 
   return {
+    rowHeight: ROW_H,
+    barHeight: BAR_H,
+    axisOffset,
     origin,
     spanMs: end - origin,
-    width: px(end - origin),
-    height: (rows + untimedIds.length) * ROW_HEIGHT,
+    width: axisOffset + px(end - origin),
+    height: (rows + untimedIds.length) * ROW_H,
     bars,
     edges,
     untimedFromRow: rows,

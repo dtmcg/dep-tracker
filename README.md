@@ -171,3 +171,7 @@ The app remembers every project you create, open or import, and offers them in a
 ## How the chart is laid out
 
 Time runs left to right. Vertically the chart is balanced like a tree: each node sits at the midpoint of its dependencies, recursively, so the success criteria ends up in the middle and the chart re-balances as you add dependencies. Bars that follow one another in time may share a row; if a label doesn't fit before the next bar it moves inside the bar, and opens in full on hover or selection. Nodes that can't be scheduled go in a band at the bottom, and anything not linked to the success criteria goes below its tree.
+
+## Time line view and node view
+
+The chart has two views, switched from the toolbar above it (the choice is remembered). **Time line view** is the original: a bar per node, as long as its work time. **Node view** draws the same data as simple rounded boxes of one size, each showing the title and completion date and ending at the point on the time axis where the node is estimated to complete. Selection highlighting, animated edges, label colours, zoom, cycle and reference markers and the details panel work the same in both.
