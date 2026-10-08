@@ -59,7 +59,7 @@ export function createApi(token: string, fetchFn: typeof fetch = (...args) => fe
   return {
     library: async () => (await request<{ projects: KnownProject[] }>("/api/library")).projects,
     forgetProject: (storage: StorageDescriptor) => post<{ ok: boolean }>("/api/library/forget", { storage }),
-    config: () => request<{ projectsDir: string }>("/api/config"),
+    config: () => request<{ projectsDir: string; resourcing?: boolean }>("/api/config"),
     openProject: (storage: StorageDescriptor) => post<OpenedProject>("/api/projects/open", { storage }),
     createProject: (input: NewProject) => post<OpenedProject>("/api/projects", input),
     getProject: (id: string) => request<OpenedProject>(projectUrl(id)),

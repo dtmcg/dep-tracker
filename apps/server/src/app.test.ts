@@ -105,7 +105,7 @@ describe("GET /api/config", () => {
   it("tells the web app the default projects folder", async () => {
     const res = await get("/api/config");
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { projectsDir: "/home/me/Documents/pdm_projects" });
+    assert.deepEqual(await res.json(), { projectsDir: "/home/me/Documents/pdm_projects", resourcing: false });
   });
 
   it("needs the token like any other call", async () => {
@@ -398,5 +398,63 @@ describe("static web app", () => {
 
   it("returns 404 for unknown API routes", async () => {
     assert.equal((await get("/api/nothing")).status, 404);
+  });
+});
+
+describe("Resourcing feature flag", () => {
+  const resourceCommands = [
+    { type: "addResourceType", name: "Developer" },
+    { type: "addResource", typeName: "Developer", resource: { id: "r1", name: "Ann", available: "40h" } },
+  ];
+
+  it("is off unless the server was started with it, and says so in the config", async () => {
+    const folder = await newFolder();
+    const { body } = await createProject(folder);
+    const res = await post(`/api/projects/${body.project.id}/commands`, { expectedVersion: body.version, commands: resourceCommands });
+    assert.equal(res.status, 403);
+    assert.match(((await res.json()) as { error: string }).error, /--resourcing/);
+    // nothing was written
+    assert.deepEqual((await (await get(`/api/projects/${body.project.id}`)).json()).project.resourceTypes, undefined);
+  });
+
+  describe("when on", () => {
+    let on = "";
+    let stop: () => Promise<void>;
+    before(async () => {
+      const server = createApp({ adapters: { csv: csvAdapter }, staticDir, token: TOKEN, resourcing: true });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      on = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      stop = () => new Promise((resolve) => server.close(() => resolve()));
+    });
+    after(() => stop());
+    const call = (url: string, body?: unknown) =>
+      fetch(on + url, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined });
+
+    it("reports itself in the config", async () => {
+      assert.equal(((await (await call("/api/config")).json()) as { resourcing: boolean }).resourcing, true);
+    });
+
+    it("saves the resource pool with the project and gives it back when it's reopened", async () => {
+      const folder = await newFolder();
+      const created = await (
+        await call("/api/projects", { storage: { kind: "csv", path: folder }, name: "Launch", start: "2026-11-02T09:00:00.000Z", root: { title: "Done", workTime: "1d" } })
+      ).json();
+      const res = await call(`/api/projects/${created.project.id}/commands`, { expectedVersion: created.version, commands: resourceCommands });
+      assert.equal(res.status, 200);
+      const reopened = await (await call("/api/projects/open", { storage: { kind: "csv", path: folder } })).json();
+      assert.deepEqual(reopened.project.resourceTypes, [{ name: "Developer", resources: [{ id: "r1", name: "Ann", available: "40h" }] }]);
+    });
+
+    it("reports a bad available time as a 422", async () => {
+      const folder = await newFolder();
+      const created = await (
+        await call("/api/projects", { storage: { kind: "csv", path: folder }, name: "Launch", start: "2026-11-02T09:00:00.000Z", root: { title: "Done", workTime: "1d" } })
+      ).json();
+      const res = await call(`/api/projects/${created.project.id}/commands`, {
+        expectedVersion: created.version,
+        commands: [resourceCommands[0], { type: "addResource", typeName: "Developer", resource: { id: "r1", name: "", available: "lots" } }],
+      });
+      assert.equal(res.status, 422);
+    });
   });
 });

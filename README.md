@@ -179,3 +179,20 @@ The chart has two views, switched from the toolbar above it (the choice is remem
 In node view a **Time scale** checkbox appears in the toolbar. Untick it to even the layout out: boxes sit in equally spaced columns by dependency depth (leaves on the left, the success criteria on the right) instead of at their completion dates, and the time axis, zoom controls and Today marker are hidden. Tick it again to return to the time axis. The checkbox is not shown in time line view, and the choice is remembered.
 
 Node view boxes are square and show the node's earliest start, its work time and its completion. Dates show just the day by default; tick **Exact times** in the toolbar to add the hours and minutes everywhere a date is shown (chart, details panel, project header). The choice is remembered.
+
+## Resourcing (feature flag)
+
+Resourcing is in development and is off by default. Start the backend with the flag to turn it on for every project:
+
+```
+npm start -- --resourcing
+```
+
+With it on, each project shows a **Resources** strip under the label key: a resource pool, like labels but with instances.
+
+- **Add resource type** defines a type such as "Developer" (names are unique, ignoring case).
+- Click a type to expand it. Its instances are listed with their name and available time, and a **+** adds a new one: a name and an available time (a duration like `40h` or `3d`). Neither is required; an instance can be saved empty.
+- Beside every instance, **+** adds another with the same details (right after it) and **−** removes it. Edits can be undone like any other.
+- **Remove type** deletes a type and its instances.
+
+The pool is saved in the project's CSV folder as `resource_types.csv` (`type`) and `resources.csv` (`type,id,name,available`), which are only created once a pool exists and are easy to edit by hand. Excel, Obsidian and Google Sheets projects don't hold a resource pool yet; the strip is read-only for them with a note saying so. Without the flag, the strip is hidden and the server refuses resource commands.

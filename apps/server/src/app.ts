@@ -9,6 +9,7 @@ import {
   newId,
   type Project,
   ProjectExistsError,
+  RESOURCE_COMMANDS,
   schedule,
   type StorageAdapter,
   type StorageDescriptor,
@@ -26,6 +27,8 @@ export interface GoogleSignIn {
 }
 
 export interface AppOptions {
+  /** The Resourcing feature (resource pool) is available. Off unless the backend was started with --resourcing. */
+  resourcing?: boolean;
   /** Storage adapters by kind. */
   adapters: Partial<Record<StorageDescriptor["kind"], StorageAdapter>>;
   /** Folder holding the built web app; omitted in API-only tests. */
@@ -135,7 +138,7 @@ export function createApp(options: AppOptions): Server {
       return sendJson(res, 200, { ok: true });
     }
 
-    if (route === "GET /api/config") return sendJson(res, 200, { projectsDir: options.projectsDir ?? "" });
+    if (route === "GET /api/config") return sendJson(res, 200, { projectsDir: options.projectsDir ?? "", resourcing: options.resourcing === true });
 
     if (route === "GET /api/auth/google/status") {
       return sendJson(res, 200, options.google ? await options.google.status() : { configured: false, connected: false });
@@ -237,6 +240,9 @@ export function createApp(options: AppOptions): Server {
           const body = await readJson(req);
           if (typeof body.expectedVersion !== "string" || !Array.isArray(body.commands)) {
             throw new HttpError(422, "Body must include expectedVersion and commands");
+          }
+          if (!options.resourcing && (body.commands as Command[]).some((c) => RESOURCE_COMMANDS.includes(c?.type))) {
+            throw new HttpError(403, "Resourcing is not enabled; start the backend with --resourcing");
           }
           const current = await adapter.load(descriptor);
           if (current.version !== body.expectedVersion) throw new VersionConflictError();

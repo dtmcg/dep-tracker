@@ -7,7 +7,7 @@ import { excelAdapter } from "@dep-tracker/adapter-excel";
 import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTokenStore } from "@dep-tracker/adapter-gsheets";
 import { obsidianAdapter } from "@dep-tracker/adapter-obsidian";
 import { createApp } from "./app.ts";
-import { defaultProjectsDir } from "./config.ts";
+import { defaultProjectsDir, resourcingEnabled } from "./config.ts";
 import { createLibrary } from "./library.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -35,10 +35,12 @@ const server = createApp({
   // The app's list of known projects lives with the code (data/ is git-ignored); nobody needs to edit it.
   library: createLibrary(process.env.DEP_TRACKER_LIBRARY_FILE ?? path.resolve(here, "../../../data/projects.json")),
   projectsDir: defaultProjectsDir(homedir(), process.platform, process.env.DEP_TRACKER_PROJECTS_DIR),
+  resourcing: resourcingEnabled(process.argv),
   staticDir: path.resolve(here, "../../web/dist"),
   token,
 });
 
 server.listen(port, host, () => {
   console.log(`dep-tracker running at http://${host}:${port}`);
+  if (resourcingEnabled(process.argv)) console.log("Resourcing feature: on");
 });

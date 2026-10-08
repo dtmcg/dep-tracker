@@ -6,3 +6,9 @@ export function defaultProjectsDir(home: string, platform: NodeJS.Platform = pro
   const join = platform === "win32" ? path.win32.join : path.posix.join;
   return join(home, "Documents", "pdm_projects");
 }
+
+/** The Resourcing feature is off unless the backend is started with --resourcing. */
+export const RESOURCING_FLAG = "--resourcing";
+export function resourcingEnabled(argv: readonly string[]): boolean {
+  return argv.includes(RESOURCING_FLAG);
+}

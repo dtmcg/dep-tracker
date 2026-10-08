@@ -26,6 +26,20 @@ export interface Dependency {
   dependencyId: string;
 }
 
+/** One member of a resource pool: a person, machine or anything else that can do work. Every field but the id is optional. */
+export interface Resource {
+  id: string;
+  name: string;
+  /** How much working time it has, in the work time format ("40h", "3d"); empty when not given. */
+  available: string;
+}
+
+/** A kind of resource ("Developer", "Test rig") and the instances of it in the pool. Types are identified by name. */
+export interface ResourceType {
+  name: string;
+  resources: Resource[];
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -37,6 +51,8 @@ export interface Project {
   edges: Dependency[];
   /** Chosen colour per label, as #rrggbb (FR-20). Labels without one use a default. */
   labelColours?: Record<string, string>;
+  /** The project's resource pool (Resourcing feature). */
+  resourceTypes?: ResourceType[];
 }
 
 /** Where a project is stored. */

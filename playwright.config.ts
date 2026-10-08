@@ -4,6 +4,7 @@ import { defineConfig, devices } from "playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 4318);
 const GOOGLE_PORT = Number(process.env.E2E_GOOGLE_PORT ?? 4319);
+const RESOURCING_PORT = Number(process.env.E2E_RESOURCING_PORT ?? 4320);
 const google = `http://127.0.0.1:${GOOGLE_PORT}`;
 // A fresh config folder per run, so Google sign-in starts signed out.
 const configDir = path.join(tmpdir(), `dep-tracker-e2e-config-${process.pid}`);
@@ -45,6 +46,20 @@ export default defineConfig({
       },
       reuseExistingServer: false,
       timeout: 60_000,
+    },
+    {
+      // The same backend started with the Resourcing feature on; only resourcing.spec.ts talks to it.
+      // The web bundle is built by the server above, so wait for it rather than build twice.
+      command: "node scripts/wait-for-web-build.mjs && node --import tsx apps/server/src/main.ts --resourcing",
+      url: `http://127.0.0.1:${RESOURCING_PORT}/api/health`,
+      env: {
+        PORT: String(RESOURCING_PORT),
+        DEP_TRACKER_CONFIG_DIR: configDir,
+        DEP_TRACKER_PROJECTS_DIR: path.join(configDir, "pdm_projects_resourcing"),
+        DEP_TRACKER_LIBRARY_FILE: path.join(configDir, "library", "projects-resourcing.json"),
+      },
+      reuseExistingServer: false,
+      timeout: 90_000,
     },
   ],
 });

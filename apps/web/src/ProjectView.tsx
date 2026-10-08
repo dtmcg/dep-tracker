@@ -1,9 +1,11 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { DetailsPanel } from "./DetailsPanel.tsx";
 import { ShowTimesContext, useDateFormatter } from "./dateDisplay.tsx";
+import { useFeatures } from "./features.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { LabelKey } from "./LabelKey.tsx";
 import type { StorageDescriptor } from "@dep-tracker/domain";
+import { ResourcePool } from "./ResourcePool.tsx";
 import type { Session } from "./useProjectSession.ts";
 import { loadShowTimes, saveShowTimes } from "./viewMode.ts";
 
@@ -32,6 +34,7 @@ function ProjectScreen({
   onShowTimes: (on: boolean) => void;
 }) {
   const formatDate = useDateFormatter();
+  const { resourcing } = useFeatures();
   const { snapshot, saveState, notice } = session;
   const { project } = snapshot;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -128,6 +131,8 @@ function ProjectScreen({
         onToggle={toggleLabel}
         onColour={(label, colour) => session.apply([{ type: "setLabelColour", label, colour }])}
       />
+
+      {resourcing && <ResourcePool project={project} saved={snapshot.storage.kind === "csv"} onApply={session.apply} />}
 
       <div className={selected ? "workspace with-panel" : "workspace"}>
         <Gantt

@@ -1,5 +1,5 @@
 import { parseDuration } from "./duration.ts";
-import type { Dependency, Project, ProjectNode, StorageDescriptor } from "./model.ts";
+import type { Dependency, Project, ProjectNode, Resource, ResourceType, StorageDescriptor } from "./model.ts";
 import { STORAGE_KINDS } from "./reference.ts";
 
 export type NodeChanges = Partial<Omit<ProjectNode, "id" | "notBefore">> & { notBefore?: string | null };
@@ -11,7 +11,15 @@ export type Command =
   | { type: "removeNode"; id: string }
   | { type: "addEdge"; dependentId: string; dependencyId: string }
   | { type: "removeEdge"; dependentId: string; dependencyId: string }
-  | { type: "setLabelColour"; label: string; colour: string | null };
+  | { type: "setLabelColour"; label: string; colour: string | null }
+  | { type: "addResourceType"; name: string }
+  | { type: "removeResourceType"; name: string }
+  /** `index` is where in the type's list it goes; the end if left out. */
+  | { type: "addResource"; typeName: string; resource: Resource; index?: number }
+  | { type: "removeResource"; typeName: string; id: string };
+
+/** Commands that change the resource pool, which only work when the Resourcing feature is on. */
+export const RESOURCE_COMMANDS: readonly Command["type"][] = ["addResourceType", "removeResourceType", "addResource", "removeResource"];
 
 export class CommandError extends Error {
   constructor(message: string) {
@@ -72,6 +80,30 @@ function findNode(project: Project, id: string): ProjectNode {
   return node;
 }
 
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function findType(project: Project, name: string): ResourceType {
+  const type = (project.resourceTypes ?? []).find((t) => sameName(t.name, name));
+  if (!type) throw new CommandError(`No resource type "${name.trim()}"`);
+  return type;
+}
+
+function validResource(resource: Resource, project: Project): Resource {
+  if (!resource.id) throw new CommandError("A resource needs an id");
+  if ((project.resourceTypes ?? []).some((t) => t.resources.some((r) => r.id === resource.id))) {
+    throw new CommandError(`A resource with id "${resource.id}" already exists`);
+  }
+  const available = (resource.available ?? "").trim();
+  try {
+    if (available) parseDuration(available);
+  } catch (error) {
+    throw new CommandError(`Available time: ${(error as Error).message}`);
+  }
+  return { id: resource.id, name: (resource.name ?? "").trim(), available };
+}
+
+const withTypes = (project: Project, types: ResourceType[]): Project => ({ ...project, resourceTypes: types });
+
 const sameEdge = (a: Dependency, b: Dependency) => a.dependentId === b.dependentId && a.dependencyId === b.dependencyId;
 
 function apply(project: Project, command: Command): Project {
@@ -128,6 +160,30 @@ function apply(project: Project, command: Command): Project {
       else throw new CommandError(`"${command.colour}" is not a colour; use #rrggbb`);
       return { ...project, labelColours: colours };
     }
+    case "addResourceType": {
+      const name = command.name.trim();
+      if (!name) throw new CommandError("A resource type needs a name");
+      const types = project.resourceTypes ?? [];
+      if (types.some((t) => sameName(t.name, name))) throw new CommandError(`There is already a resource type "${name}"`);
+      return withTypes(project, [...types, { name, resources: [] }]);
+    }
+    case "removeResourceType": {
+      const type = findType(project, command.name);
+      return withTypes(project, (project.resourceTypes ?? []).filter((t) => t !== type));
+    }
+    case "addResource": {
+      const type = findType(project, command.typeName);
+      const resource = validResource(command.resource, project);
+      const at = Math.min(Math.max(command.index ?? type.resources.length, 0), type.resources.length);
+      const resources = [...type.resources.slice(0, at), resource, ...type.resources.slice(at)];
+      return withTypes(project, (project.resourceTypes ?? []).map((t) => (t === type ? { ...t, resources } : t)));
+    }
+    case "removeResource": {
+      const type = findType(project, command.typeName);
+      if (!type.resources.some((r) => r.id === command.id)) throw new CommandError(`No resource with id "${command.id}" in ${type.name}`);
+      const resources = type.resources.filter((r) => r.id !== command.id);
+      return withTypes(project, (project.resourceTypes ?? []).map((t) => (t === type ? { ...t, resources } : t)));
+    }
     default:
       throw new CommandError(`Unknown command ${JSON.stringify((command as { type?: unknown }).type)}`);
   }
@@ -162,6 +218,22 @@ function inverseOf(before: Project, command: Command): Command[] {
       return [{ type: "addEdge", dependentId: command.dependentId, dependencyId: command.dependencyId }];
     case "setLabelColour":
       return [{ type: "setLabelColour", label: command.label, colour: before.labelColours?.[command.label.trim()] ?? null }];
+    case "addResourceType":
+      return [{ type: "removeResourceType", name: command.name }];
+    case "removeResourceType": {
+      const type = findType(before, command.name);
+      return [
+        { type: "addResourceType", name: type.name },
+        ...type.resources.map((resource): Command => ({ type: "addResource", typeName: type.name, resource })),
+      ];
+    }
+    case "addResource":
+      return [{ type: "removeResource", typeName: command.typeName, id: command.resource.id }];
+    case "removeResource": {
+      const type = findType(before, command.typeName);
+      const index = type.resources.findIndex((r) => r.id === command.id);
+      return [{ type: "addResource", typeName: type.name, resource: type.resources[index]!, index }];
+    }
   }
 }
 

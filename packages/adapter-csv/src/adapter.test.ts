@@ -118,3 +118,64 @@ describe("csvAdapter.save", () => {
     assert.deepEqual(files.filter((f) => f.includes(".tmp")), []);
   });
 });
+
+describe("csvAdapter resource pool", () => {
+  const withPool = (project: Awaited<ReturnType<typeof csvAdapter.load>>["project"]) => ({
+    ...project,
+    resourceTypes: [
+      { name: "Developer", resources: [{ id: "r1", name: "Ann", available: "40h" }, { id: "r2", name: "", available: "" }] },
+      { name: "Test rig", resources: [] },
+    ],
+  });
+
+  it("writes no resource files, and loads no pool, for a project without one", async () => {
+    const dir = await copyOfSample();
+    const { project, version } = await csvAdapter.load({ kind: "csv", path: dir });
+    assert.equal(project.resourceTypes, undefined);
+    await csvAdapter.save({ kind: "csv", path: dir }, { ...project, name: "Renamed" }, version);
+    const files = await readdir(dir);
+    assert.deepEqual(files.filter((f) => f.startsWith("resource")), []);
+  });
+
+  it("saves the pool in two plain CSV files and loads it back, empty types and unnamed instances included", async () => {
+    const dir = await copyOfSample();
+    const { project, version } = await csvAdapter.load({ kind: "csv", path: dir });
+    await csvAdapter.save({ kind: "csv", path: dir }, withPool(project), version);
+    assert.equal(await readFile(path.join(dir, "resource_types.csv"), "utf8"), "type\nDeveloper\nTest rig\n");
+    assert.match(await readFile(path.join(dir, "resources.csv"), "utf8"), /^type,id,name,available\nDeveloper,r1,Ann,40h\nDeveloper,r2,,\n/);
+    assert.deepEqual((await csvAdapter.load({ kind: "csv", path: dir })).project.resourceTypes, withPool(project).resourceTypes);
+  });
+
+  it("changes the version when only the pool changes", async () => {
+    const dir = await copyOfSample();
+    const d = { kind: "csv", path: dir } as const;
+    const { project, version } = await csvAdapter.load(d);
+    const saved = await csvAdapter.save(d, withPool(project), version);
+    assert.notEqual(saved, version);
+    assert.equal(await csvAdapter.version(d), saved);
+  });
+
+  it("reads a pool written by hand: a type only named in resources.csv, a blank id, a blank name", async () => {
+    const dir = await copyOfSample();
+    await writeFile(path.join(dir, "resources.csv"), "type,name,available\nDeveloper,Ann,2d\nDeveloper,,\n");
+    const { project } = await csvAdapter.load({ kind: "csv", path: dir });
+    assert.deepEqual(project.resourceTypes, [
+      { name: "Developer", resources: [{ id: "r2", name: "Ann", available: "2d" }, { id: "r3", name: "", available: "" }] },
+    ]);
+  });
+
+  it("rejects an available time that isn't a duration, naming the file and line", async () => {
+    const dir = await copyOfSample();
+    await writeFile(path.join(dir, "resources.csv"), "type,id,name,available\nDeveloper,r1,Ann,plenty\n");
+    await assert.rejects(csvAdapter.load({ kind: "csv", path: dir }), /resources\.csv line 2.*available/);
+  });
+
+  it("keeps an emptied pool's files so the pool stays empty, not absent", async () => {
+    const dir = await copyOfSample();
+    const d = { kind: "csv", path: dir } as const;
+    const first = await csvAdapter.load(d);
+    const v = await csvAdapter.save(d, withPool(first.project), first.version);
+    await csvAdapter.save(d, { ...first.project, resourceTypes: [] }, v);
+    assert.deepEqual((await csvAdapter.load(d)).project.resourceTypes, []);
+  });
+});
