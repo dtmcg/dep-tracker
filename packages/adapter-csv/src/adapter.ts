@@ -48,15 +48,31 @@ const NODE_COLUMNS = ["id", "title", "work_time", "not_before", "labels", "descr
 const RESOURCES_COLUMN = "resources";
 
 function formatRequirements(list: ResourceRequirement[] | undefined): string {
-  return (list ?? []).map((r) => (r.count === 1 ? r.typeName : `${r.typeName} x ${r.count}`)).join("; ");
+  return (list ?? [])
+    .map((r) => {
+      const limits = [r.min !== undefined ? `min ${r.min}` : "", r.max !== undefined ? `max ${r.max}` : ""].filter(Boolean).join(", ");
+      return `${r.count === 1 ? r.typeName : `${r.typeName} x ${r.count}`}${limits ? ` (${limits})` : ""}`;
+    })
+    .join("; ");
 }
 
+/** "Developer x 2 (min 1, max 3)": the number and the limits in brackets are each optional. With limits but no number, it starts at the minimum. */
 function parseRequirements(cell: string, where: string): ResourceRequirement[] {
   return splitList(cell).map((item) => {
-    const m = /^(.*?)(?:\s+x|\s*×)\s*(\d+)$/i.exec(item);
-    const count = m ? Number(m[2]) : 1;
-    if (count < 1) throw new CsvAdapterError(`${where}: "${item}" needs at least 1`);
-    return { typeName: (m ? m[1]! : item).trim(), count };
+    const bracket = /\s*\(([^)]*)\)\s*$/.exec(item);
+    const body = bracket ? item.slice(0, bracket.index) : item;
+    let min: number | undefined;
+    let max: number | undefined;
+    for (const part of (bracket?.[1] ?? "").split(",").map((p) => p.trim()).filter(Boolean)) {
+      const m = /^(min|max)\s+(\d+)$/i.exec(part);
+      if (!m) throw new CsvAdapterError(`${where}: "${part}" in "${item}" should be "min N" or "max N"`);
+      if (m[1]!.toLowerCase() === "min") min = Number(m[2]);
+      else max = Number(m[2]);
+    }
+    const m = /^(.*?)(?:\s+x|\s*×)\s*(\d+)$/i.exec(body.trim());
+    const count = m ? Number(m[2]) : min ?? 1;
+    if (count < 1 || min === 0 || max === 0) throw new CsvAdapterError(`${where}: "${item}" needs at least 1`);
+    return { typeName: (m ? m[1]! : body).trim(), count, ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
   });
 }
 

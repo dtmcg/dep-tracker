@@ -2,7 +2,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { describeConsumption, newId, nodeConsumption, parseReference, type ProjectNode, STORAGE_KINDS, type StorageDescriptor } from "@dep-tracker/domain";
 import { useDateFormatter } from "./dateDisplay.tsx";
 import { useFeatures } from "./features.tsx";
-import { changeCount, requireType } from "./resources.ts";
+import { canChange, changeCount, requireType, setLimits } from "./resources.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { formChanges, type NodeForm, toForm } from "./nodeForm.ts";
 import { applyLocally, dependencyCommands, referenceCommands } from "./projectState.ts";
@@ -219,6 +219,7 @@ function NodeResources({ node, session }: { node: ProjectNode; session: Session 
   const [choice, setChoice] = useState("");
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
+  const [limitsFor, setLimitsFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const picking = choice === NEW ? newName : choice;
   const add = () => {
@@ -245,18 +246,49 @@ function NodeResources({ node, session }: { node: ProjectNode; session: Session 
               <span className="requirement-count" data-testid="requirement-count" aria-label={`${r.count} ${r.typeName} needed`}>
                 × {r.count}
               </span>
+              <span className="resource-actions">
+                <button
+                  className="ghost small icon"
+                  aria-label={`One more ${r.typeName}`}
+                  disabled={!canChange(r, 1)}
+                  title={canChange(r, 1) ? undefined : `At the maximum of ${r.max}`}
+                  onClick={() => session.apply([changeCount(node, r.typeName, 1)])}
+                >
+                  +
+                </button>
+                <button
+                  className="ghost small icon"
+                  aria-label={`One fewer ${r.typeName}`}
+                  disabled={!canChange(r, -1)}
+                  title={canChange(r, -1) ? undefined : `At the minimum of ${r.min}`}
+                  onClick={() => session.apply([changeCount(node, r.typeName, -1)])}
+                >
+                  −
+                </button>
+              </span>
+              <span className="requirement-limits" data-testid="requirement-limits">
+                {r.min === undefined && r.max === undefined ? "no limits" : [r.min !== undefined ? `min ${r.min}` : "", r.max !== undefined ? `max ${r.max}` : ""].filter(Boolean).join(", ")}
+              </span>
+              <button className="link-button small" aria-expanded={limitsFor === r.typeName} onClick={() => setLimitsFor(limitsFor === r.typeName ? null : r.typeName)}>
+                Limits
+              </button>
               <span className="requirement-use" data-testid="requirement-consumption">
                 uses {describeConsumption(consumption.find((c) => c.typeName === r.typeName)!)}
               </span>
-              {(
-                <span className="resource-actions">
-                  <button className="ghost small icon" aria-label={`One more ${r.typeName}`} onClick={() => session.apply([changeCount(node, r.typeName, 1)])}>
-                    +
-                  </button>
-                  <button className="ghost small icon" aria-label={`One fewer ${r.typeName}`} onClick={() => session.apply([changeCount(node, r.typeName, -1)])}>
-                    −
-                  </button>
-                </span>
+              {limitsFor === r.typeName && (
+                <LimitsForm
+                  requirement={r}
+                  onSave={(limits) => {
+                    try {
+                      session.apply([setLimits(node, r.typeName, limits)]);
+                      setLimitsFor(null);
+                      return null;
+                    } catch (e) {
+                      return (e as Error).message;
+                    }
+                  }}
+                  onCancel={() => setLimitsFor(null)}
+                />
               )}
             </li>
           ))}
@@ -308,6 +340,51 @@ function NodeResources({ node, session }: { node: ProjectNode; session: Session 
         </form>
       )}
     </section>
+  );
+}
+
+/** Minimum and maximum for one requirement; blank means no limit. */
+function LimitsForm({
+  requirement,
+  onSave,
+  onCancel,
+}: {
+  requirement: { typeName: string; min?: number; max?: number };
+  onSave: (limits: { min: string; max: string }) => string | null;
+  onCancel: () => void;
+}) {
+  const [min, setMin] = useState(requirement.min?.toString() ?? "");
+  const [max, setMax] = useState(requirement.max?.toString() ?? "");
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="resource-form limits-form"
+      aria-label={`Limits for ${requirement.typeName}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(onSave({ min, max }));
+      }}
+    >
+      <label>
+        Minimum
+        <input inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} placeholder="none" />
+      </label>
+      <label>
+        Maximum
+        <input inputMode="numeric" value={max} onChange={(e) => setMax(e.target.value)} placeholder="none" />
+      </label>
+      <button type="submit" className="small">
+        Save
+      </button>
+      <button type="button" className="ghost small" onClick={onCancel}>
+        Cancel
+      </button>
+      {error && (
+        <span className="field-error" role="alert">
+          {error}
+        </span>
+      )}
+    </form>
   );
 }
 

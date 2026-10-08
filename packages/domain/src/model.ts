@@ -21,7 +21,12 @@ export interface ProjectNode {
 /** What a work item needs from the resource pool: `count` resources of the named type, e.g. a Developer x 2. */
 export interface ResourceRequirement {
   typeName: string;
+  /** How many are allocated now; within min and max when those are set. */
   count: number;
+  /** Fewest the item can do with (a whole number, at least 1); absent for no lower limit. */
+  min?: number;
+  /** Most it can use (a whole number, at least min); absent for no upper limit. */
+  max?: number;
 }
 
 export interface ReferenceTarget {

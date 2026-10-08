@@ -140,3 +140,36 @@ describe("resources and the schedule", () => {
     assert.deepEqual(schedule(more).nodes, schedule(plain).nodes);
   });
 });
+
+describe("minimum and maximum resources", () => {
+  const set = (resources: object[]) => applyCommands(withDevs, [{ type: "updateNode", id: "n01", changes: { resources } as never }]);
+  const dev = (extra: object) => ({ typeName: "Developer", count: 2, ...extra });
+
+  it("lets a requirement carry a minimum and a maximum, e.g. Developer 1 to 3", () => {
+    assert.deepEqual(set([dev({ min: 1, max: 3 })]).nodes[0]!.resources, [dev({ min: 1, max: 3 })]);
+  });
+
+  it("makes both optional: either one alone, or neither", () => {
+    assert.deepEqual(set([dev({ min: 2 })]).nodes[0]!.resources, [dev({ min: 2 })]);
+    assert.deepEqual(set([dev({ max: 5 })]).nodes[0]!.resources, [dev({ max: 5 })]);
+    assert.equal("min" in set([dev({})]).nodes[0]!.resources![0]!, false);
+  });
+
+  it("keeps the number allocated within the limits", () => {
+    assert.throws(() => set([dev({ min: 3 })]), /below the minimum of 3/);
+    assert.throws(() => set([dev({ max: 1 })]), /above the maximum of 1/);
+    assert.doesNotThrow(() => set([dev({ min: 2, max: 2 })]));
+  });
+
+  it("needs whole numbers of at least 1, and a maximum that isn't below the minimum", () => {
+    for (const bad of [{ min: 0 }, { max: 0 }, { min: 1.5 }, { max: -2 }]) assert.throws(() => set([dev(bad)]), /whole number/);
+    assert.throws(() => set([dev({ min: 3, max: 2, count: 3 })]), /can't be less than the minimum/);
+  });
+
+  it("undoes a change of limits", () => {
+    const withLimits = set([dev({ min: 1, max: 3 })]);
+    const change: Command[] = [{ type: "updateNode", id: "n01", changes: { resources: [dev({ min: 2, max: 4 })] } }];
+    const undo = invertCommands(withLimits, change);
+    assert.deepEqual(applyCommands(applyCommands(withLimits, change), undo), withLimits);
+  });
+});

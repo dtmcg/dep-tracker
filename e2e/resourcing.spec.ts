@@ -190,3 +190,65 @@ test("resource consumption: each allocated resource uses the full work time, and
   // more resources don't change the dates
   await expect(completion).toHaveText(before!);
 });
+
+test("resource limits: a minimum and maximum per requirement bound the + and −", async ({ page }) => {
+  const folder = await newProject(page, { start: "2026-11-02T09:00", root: "Release", work: "2d" });
+  const pool = page.getByRole("region", { name: "Resource pool" });
+  await pool.getByRole("button", { name: "Add resource type" }).click();
+  await page.getByLabel("Resource type name").fill("Developer");
+  await page.getByRole("button", { name: "Save" }).click();
+  const needs = (await details(page, "Release")).getByRole("region", { name: "Resources needed" });
+  await needs.getByRole("button", { name: "Add resource requirement" }).click();
+  await needs.getByLabel("Resource type").selectOption("Developer");
+  await needs.getByRole("button", { name: "Add", exact: true }).click();
+  const count = needs.getByTestId("requirement-count");
+  const limits = needs.getByTestId("requirement-limits");
+  await expect(limits).toHaveText("no limits");
+
+  // Max 3, min 1
+  await needs.getByRole("button", { name: "Limits" }).click();
+  const form = needs.getByRole("form", { name: "Limits for Developer" });
+  await form.getByLabel("Minimum").fill("1");
+  await form.getByLabel("Maximum").fill("3");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(limits).toHaveText("min 1, max 3");
+
+  // + stops at the maximum, − at the minimum
+  const more = needs.getByRole("button", { name: "One more Developer" });
+  const fewer = needs.getByRole("button", { name: "One fewer Developer" });
+  await expect(fewer).toBeDisabled();
+  await more.click();
+  await more.click();
+  await expect(count).toHaveText("× 3");
+  await expect(more).toBeDisabled();
+  await fewer.click();
+  await fewer.click();
+  await expect(count).toHaveText("× 1");
+  await expect(fewer).toBeDisabled();
+
+  // A maximum below the minimum is refused
+  await needs.getByRole("button", { name: "Limits" }).click();
+  const again = needs.getByRole("form", { name: "Limits for Developer" });
+  await again.getByLabel("Minimum").fill("3");
+  await again.getByLabel("Maximum").fill("2");
+  await again.getByRole("button", { name: "Save" }).click();
+  await expect(again.getByRole("alert")).toContainText("can't be less");
+
+  // Raising the minimum lifts the number with it
+  await again.getByLabel("Maximum").fill("");
+  await again.getByRole("button", { name: "Save" }).click();
+  await expect(count).toHaveText("× 3");
+  await expect(limits).toHaveText("min 3");
+
+  // Plain text in nodes.csv; undo restores the earlier limits; and it survives reopening
+  await expect(async () => {
+    expect(await readFile(path.join(folder, "nodes.csv"), "utf8")).toContain("Developer x 3 (min 3)");
+  }).toPass();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(limits).toHaveText("min 1, max 3");
+  await expect(count).toHaveText("× 1");
+  await openFromList(page, folder);
+  const reopened = (await details(page, "Release")).getByRole("region", { name: "Resources needed" });
+  await expect(reopened.getByTestId("requirement-limits")).toHaveText("min 1, max 3");
+  await expect(reopened.getByTestId("requirement-count")).toHaveText("× 1");
+});

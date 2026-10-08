@@ -67,9 +67,19 @@ function validRequirements(node: ProjectNode, project: Project): ResourceRequire
     if (!Number.isInteger(requirement.count) || requirement.count < 1) {
       throw new CommandError(`${type.name}: the number needed must be a whole number, at least 1`);
     }
+    const limit = (value: unknown, what: string): number | undefined => {
+      if (value === undefined || value === null) return undefined;
+      if (!Number.isInteger(value) || (value as number) < 1) throw new CommandError(`${type.name}: the ${what} must be a whole number, at least 1`);
+      return value as number;
+    };
+    const min = limit(requirement.min, "minimum");
+    const max = limit(requirement.max, "maximum");
+    if (min !== undefined && max !== undefined && max < min) throw new CommandError(`${type.name}: the maximum (${max}) can't be less than the minimum (${min})`);
+    if (min !== undefined && requirement.count < min) throw new CommandError(`${type.name}: ${requirement.count} is below the minimum of ${min}`);
+    if (max !== undefined && requirement.count > max) throw new CommandError(`${type.name}: ${requirement.count} is above the maximum of ${max}`);
     if (seen.has(type.name)) throw new CommandError(`${type.name} is listed twice`);
     seen.add(type.name);
-    return { typeName: type.name, count: requirement.count };
+    return { typeName: type.name, count: requirement.count, ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
   });
 }
 

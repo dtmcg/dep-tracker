@@ -221,3 +221,44 @@ describe("csvAdapter resource requirements", () => {
     await assert.rejects(csvAdapter.load(d(dir)), /nodes\.csv line 2, resources.*at least 1/);
   });
 });
+
+describe("csvAdapter resource limits", () => {
+  const d = (dir: string) => ({ kind: "csv", path: dir }) as const;
+  const roundTrip = async (resources: { typeName: string; count: number; min?: number; max?: number }[]) => {
+    const dir = await copyOfSample();
+    const { project, version } = await csvAdapter.load(d(dir));
+    const types = [...new Set(resources.map((r) => r.typeName))].map((name) => ({ name, resources: [] }));
+    await csvAdapter.save(d(dir), { ...project, resourceTypes: types, nodes: project.nodes.map((n, i) => (i === 0 ? { ...n, resources } : n)) }, version);
+    const text = await readFile(path.join(dir, "nodes.csv"), "utf8");
+    return { text, back: (await csvAdapter.load(d(dir))).project.nodes[0]!.resources };
+  };
+
+  it("writes limits in brackets, readably, and reads them back", async () => {
+    const { text, back } = await roundTrip([
+      { typeName: "Developer", count: 2, min: 1, max: 3 },
+      { typeName: "Tester", count: 1, max: 2 },
+      { typeName: "Designer", count: 4 },
+    ]);
+    assert.match(text, /"Developer x 2 \(min 1, max 3\); Tester \(max 2\); Designer x 4"/);
+    assert.deepEqual(back, [
+      { typeName: "Developer", count: 2, min: 1, max: 3 },
+      { typeName: "Tester", count: 1, max: 2 },
+      { typeName: "Designer", count: 4 },
+    ]);
+  });
+
+  it("reads hand-written limits; with no number, the count starts at the minimum", async () => {
+    const dir = await copyOfSample();
+    await writeFile(path.join(dir, "nodes.csv"), 'id,title,work_time,resources\nn01,A,1d,"Developer (min 2, max 4); QA (MAX 1)"\n');
+    const { project } = await csvAdapter.load(d(dir));
+    assert.deepEqual(project.nodes[0]!.resources, [{ typeName: "Developer", count: 2, min: 2, max: 4 }, { typeName: "QA", count: 1, max: 1 }]);
+  });
+
+  it("rejects a limit it can't read, or of zero", async () => {
+    const dir = await copyOfSample();
+    await writeFile(path.join(dir, "nodes.csv"), "id,title,work_time,resources\nn01,A,1d,Developer (lots)\n");
+    await assert.rejects(csvAdapter.load(d(dir)), /nodes\.csv line 2, resources.*"min N" or "max N"/);
+    await writeFile(path.join(dir, "nodes.csv"), "id,title,work_time,resources\nn01,A,1d,Developer (min 0)\n");
+    await assert.rejects(csvAdapter.load(d(dir)), /at least 1/);
+  });
+});

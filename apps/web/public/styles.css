@@ -398,3 +398,8 @@ button.icon { min-width: 28px; padding: 2px 6px; font-size: 16px; line-height: 1
 .node-resources select { width: auto; }
 .requirement-use { color: var(--ink-quiet); font-size: 12.5px; }
 .resource-use { margin: 0 0 6px; color: var(--ink-quiet); font-size: 13px; }
+.node-resources li { flex-wrap: wrap; }
+.requirement-limits { color: var(--ink-quiet); font-size: 12.5px; }
+.limits-form { flex-basis: 100%; }
+.limits-form input { width: 5em; }
+button.icon:disabled { opacity: 0.4; cursor: not-allowed; }
