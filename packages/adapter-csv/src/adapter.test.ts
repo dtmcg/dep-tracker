@@ -179,3 +179,45 @@ describe("csvAdapter resource pool", () => {
     assert.deepEqual((await csvAdapter.load(d)).project.resourceTypes, []);
   });
 });
+
+describe("csvAdapter resource requirements", () => {
+  const d = (dir: string) => ({ kind: "csv", path: dir }) as const;
+
+  it("adds no resources column unless a node needs resources", async () => {
+    const dir = await copyOfSample();
+    const { project, version } = await csvAdapter.load(d(dir));
+    await csvAdapter.save(d(dir), { ...project, name: "Renamed" }, version);
+    assert.doesNotMatch((await readFile(path.join(dir, "nodes.csv"), "utf8")).split("\n")[0]!, /resources/);
+  });
+
+  it("writes requirements in a readable column, 'Developer x 2; Tester', and reads them back", async () => {
+    const dir = await copyOfSample();
+    const { project, version } = await csvAdapter.load(d(dir));
+    const first = project.nodes[0]!;
+    const withNeeds = {
+      ...project,
+      resourceTypes: [{ name: "Developer", resources: [] }, { name: "Tester", resources: [] }],
+      nodes: project.nodes.map((n) => (n === first ? { ...n, resources: [{ typeName: "Developer", count: 2 }, { typeName: "Tester", count: 1 }] } : n)),
+    };
+    await csvAdapter.save(d(dir), withNeeds, version);
+    const text = await readFile(path.join(dir, "nodes.csv"), "utf8");
+    assert.match(text.split("\n")[0]!, /resources/);
+    assert.match(text, /Developer x 2; Tester/);
+    const reloaded = (await csvAdapter.load(d(dir))).project;
+    assert.deepEqual(reloaded.nodes.find((n) => n.id === first.id)!.resources, [{ typeName: "Developer", count: 2 }, { typeName: "Tester", count: 1 }]);
+    assert.equal(reloaded.nodes.filter((n) => n.resources).length, 1);
+  });
+
+  it("reads hand-written requirements: a missing number means 1, × works too", async () => {
+    const dir = await copyOfSample();
+    await writeFile(path.join(dir, "nodes.csv"), 'id,title,work_time,resources\nn01,A,1d,"Developer×3; QA"\n');
+    const { project } = await csvAdapter.load(d(dir));
+    assert.deepEqual(project.nodes[0]!.resources, [{ typeName: "Developer", count: 3 }, { typeName: "QA", count: 1 }]);
+  });
+
+  it("rejects a requirement for zero", async () => {
+    const dir = await copyOfSample();
+    await writeFile(path.join(dir, "nodes.csv"), "id,title,work_time,resources\nn01,A,1d,Developer x 0\n");
+    await assert.rejects(csvAdapter.load(d(dir)), /nodes\.csv line 2, resources.*at least 1/);
+  });
+});

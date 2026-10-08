@@ -417,6 +417,16 @@ describe("Resourcing feature flag", () => {
     assert.deepEqual((await (await get(`/api/projects/${body.project.id}`)).json()).project.resourceTypes, undefined);
   });
 
+  it("also refuses a work item's resource requirements when off", async () => {
+    const folder = await newFolder();
+    const { body } = await createProject(folder);
+    const res = await post(`/api/projects/${body.project.id}/commands`, {
+      expectedVersion: body.version,
+      commands: [{ type: "updateNode", id: body.project.rootId, changes: { resources: [] } }],
+    });
+    assert.equal(res.status, 403);
+  });
+
   describe("when on", () => {
     let on = "";
     let stop: () => Promise<void>;
@@ -443,6 +453,23 @@ describe("Resourcing feature flag", () => {
       assert.equal(res.status, 200);
       const reopened = await (await call("/api/projects/open", { storage: { kind: "csv", path: folder } })).json();
       assert.deepEqual(reopened.project.resourceTypes, [{ name: "Developer", resources: [{ id: "r1", name: "Ann", available: "40h" }] }]);
+    });
+
+    it("saves a work item's requirement with the project", async () => {
+      const folder = await newFolder();
+      const created = await (
+        await call("/api/projects", { storage: { kind: "csv", path: folder }, name: "Launch", start: "2026-11-02T09:00:00.000Z", root: { title: "Done", workTime: "1d" } })
+      ).json();
+      const res = await call(`/api/projects/${created.project.id}/commands`, {
+        expectedVersion: created.version,
+        commands: [
+          { type: "addResourceType", name: "Developer" },
+          { type: "updateNode", id: created.project.rootId, changes: { resources: [{ typeName: "Developer", count: 2 }] } },
+        ],
+      });
+      assert.equal(res.status, 200);
+      const reopened = await (await call("/api/projects/open", { storage: { kind: "csv", path: folder } })).json();
+      assert.deepEqual(reopened.project.nodes[0].resources, [{ typeName: "Developer", count: 2 }]);
     });
 
     it("reports a bad available time as a 422", async () => {

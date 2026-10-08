@@ -9,6 +9,7 @@ import {
   type Project,
   ProjectExistsError,
   type ProjectNode,
+  type ResourceRequirement,
   type ResourceType,
   type StorageAdapter,
   VersionConflictError,
@@ -43,6 +44,21 @@ const OPTIONAL_FILES: (keyof typeof FILES)[] = ["resourceTypes", "resources"];
 type FileTexts = Record<keyof typeof FILES, string>;
 
 const NODE_COLUMNS = ["id", "title", "work_time", "not_before", "labels", "description", "links", "reference"] as const;
+/** Resource requirements, e.g. "Developer x 2; Tester". Only written when some node has one (or the file already has the column). */
+const RESOURCES_COLUMN = "resources";
+
+function formatRequirements(list: ResourceRequirement[] | undefined): string {
+  return (list ?? []).map((r) => (r.count === 1 ? r.typeName : `${r.typeName} x ${r.count}`)).join("; ");
+}
+
+function parseRequirements(cell: string, where: string): ResourceRequirement[] {
+  return splitList(cell).map((item) => {
+    const m = /^(.*?)(?:\s+x|\s*×)\s*(\d+)$/i.exec(item);
+    const count = m ? Number(m[2]) : 1;
+    if (count < 1) throw new CsvAdapterError(`${where}: "${item}" needs at least 1`);
+    return { typeName: (m ? m[1]! : item).trim(), count };
+  });
+}
 
 async function readText(folder: string, name: string, required: boolean): Promise<string> {
   const file = path.join(folder, name);
@@ -118,6 +134,7 @@ function parseProject(texts: FileTexts): Project {
       "description",
       "links",
       "reference",
+      RESOURCES_COLUMN,
     ]).records.map(({ line, values }) => {
       const id = values.id ?? "";
       if (!id) throw new CsvAdapterError(`${FILES.nodes} line ${line}: id is empty`);
@@ -131,6 +148,10 @@ function parseProject(texts: FileTexts): Project {
         description: values.description ?? "",
         links: splitList(values.links ?? ""),
       };
+      if (values.resources) {
+        const resources = parseRequirements(values.resources, `${FILES.nodes} line ${line}, resources`);
+        if (resources.length) node.resources = resources;
+      }
       if (values.reference) {
         // A reference stands in for another project's success criteria; its time comes from there.
         try {
@@ -221,7 +242,7 @@ function extraColumns(previousNodes: string): { header: string[]; byId: Map<stri
   const { header, rows } = readTable(previousNodes);
   const keys = header.map((h) => h.trim().toLowerCase());
   const idIndex = keys.indexOf("id");
-  const known = new Set<string>(NODE_COLUMNS);
+  const known = new Set<string>([...NODE_COLUMNS, RESOURCES_COLUMN]);
   for (const row of rows) {
     const id = idIndex >= 0 ? (row.fields[idIndex] ?? "").trim() : "";
     const extras = new Map<string, string>();
@@ -238,6 +259,7 @@ function extraColumns(previousNodes: string): { header: string[]; byId: Map<stri
 
 function serialise(project: Project, previous: FileTexts | null): FileTexts {
   const { header, byId } = extraColumns(previous?.nodes ?? "");
+  if (!header.includes(RESOURCES_COLUMN) && project.nodes.some((n) => n.resources?.length)) header.push(RESOURCES_COLUMN);
   const nodeRows = project.nodes.map((node) => {
     const ours: Record<string, string> = {
       id: node.id,
@@ -248,6 +270,7 @@ function serialise(project: Project, previous: FileTexts | null): FileTexts {
       description: node.description,
       links: node.links.join(";"),
       reference: node.ref ? formatReference(node.ref.storage) : "",
+      [RESOURCES_COLUMN]: formatRequirements(node.resources),
     };
     const extras = byId.get(node.id);
     return header.map((column) => ours[column] ?? extras?.get(column) ?? "");

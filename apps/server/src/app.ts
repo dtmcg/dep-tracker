@@ -9,7 +9,7 @@ import {
   newId,
   type Project,
   ProjectExistsError,
-  RESOURCE_COMMANDS,
+  usesResourcing,
   schedule,
   type StorageAdapter,
   type StorageDescriptor,
@@ -241,7 +241,7 @@ export function createApp(options: AppOptions): Server {
           if (typeof body.expectedVersion !== "string" || !Array.isArray(body.commands)) {
             throw new HttpError(422, "Body must include expectedVersion and commands");
           }
-          if (!options.resourcing && (body.commands as Command[]).some((c) => RESOURCE_COMMANDS.includes(c?.type))) {
+          if (!options.resourcing && (body.commands as Command[]).some(usesResourcing)) {
             throw new HttpError(403, "Resourcing is not enabled; start the backend with --resourcing");
           }
           const current = await adapter.load(descriptor);

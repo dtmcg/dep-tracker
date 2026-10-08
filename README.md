@@ -196,3 +196,9 @@ With it on, each project shows a **Resources** strip under the label key: a reso
 - **Remove type** deletes a type and its instances.
 
 The pool is saved in the project's CSV folder as `resource_types.csv` (`type`) and `resources.csv` (`type,id,name,available`), which are only created once a pool exists and are easy to edit by hand. Excel, Obsidian and Google Sheets projects don't hold a resource pool yet; the strip is read-only for them with a note saying so. Without the flag, the strip is hidden and the server refuses resource commands.
+
+### Resource requirements on work items
+
+With `--resourcing` on, a selected work item's details panel has a **Resources needed** section. **Add resource requirement** lets you choose one of the pool's types, or **New type…** to create one on the spot (it joins the pool too). A requirement starts at 1; the **+** and **−** beside it change the number needed (a Developer × 2), and **−** at 1 removes it. A type can appear once per work item, and references to other projects can't have requirements.
+
+In CSV projects it is saved in a `resources` column of `nodes.csv`, e.g. `Developer x 2; Tester` (a type with no number needs 1). The column only appears once some work item needs a resource. Removing a type from the pool also clears it from the work items that needed it (undo restores both).

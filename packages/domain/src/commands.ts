@@ -1,5 +1,5 @@
 import { parseDuration } from "./duration.ts";
-import type { Dependency, Project, ProjectNode, Resource, ResourceType, StorageDescriptor } from "./model.ts";
+import type { Dependency, Project, ProjectNode, Resource, ResourceRequirement, ResourceType, StorageDescriptor } from "./model.ts";
 import { STORAGE_KINDS } from "./reference.ts";
 
 export type NodeChanges = Partial<Omit<ProjectNode, "id" | "notBefore">> & { notBefore?: string | null };
@@ -21,12 +21,22 @@ export type Command =
 /** Commands that change the resource pool, which only work when the Resourcing feature is on. */
 export const RESOURCE_COMMANDS: readonly Command["type"][] = ["addResourceType", "removeResourceType", "addResource", "removeResource"];
 
+/** Whether a command is part of the Resourcing feature: a pool command, or a node edit that sets resource requirements. */
+export function usesResourcing(command: Command): boolean {
+  if (RESOURCE_COMMANDS.includes(command?.type)) return true;
+  if (command?.type === "updateNode") return "resources" in (command.changes ?? {});
+  if (command?.type === "addNode") return (command.node?.resources ?? []).length > 0;
+  return false;
+}
+
 export class CommandError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CommandError";
   }
 }
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 const FROM_OTHER_PROJECT = "A reference takes its time from the other project, so its work time and not-before date can't be set here";
 
@@ -46,7 +56,24 @@ function validReference(node: ProjectNode): ProjectNode {
   };
 }
 
-function validNode(node: ProjectNode): ProjectNode {
+/** A node's resource requirements: each names a type in the pool, once, with a whole number of at least 1. */
+function validRequirements(node: ProjectNode, project: Project): ResourceRequirement[] {
+  const wanted = node.resources ?? [];
+  if (wanted.length && node.ref) throw new CommandError("A reference takes its time from the other project, so it can't need resources here");
+  const seen = new Set<string>();
+  return wanted.map((requirement) => {
+    const type = (project.resourceTypes ?? []).find((t) => sameName(t.name, String(requirement.typeName ?? "")));
+    if (!type) throw new CommandError(`"${String(requirement.typeName ?? "").trim()}" is not a resource type in this project`);
+    if (!Number.isInteger(requirement.count) || requirement.count < 1) {
+      throw new CommandError(`${type.name}: the number needed must be a whole number, at least 1`);
+    }
+    if (seen.has(type.name)) throw new CommandError(`${type.name} is listed twice`);
+    seen.add(type.name);
+    return { typeName: type.name, count: requirement.count };
+  });
+}
+
+function validNode(node: ProjectNode, project: Project): ProjectNode {
   const title = node.title.trim();
   if (!node.id) throw new CommandError("A node needs an id");
   if (!title) throw new CommandError("A node needs a title");
@@ -63,6 +90,7 @@ function validNode(node: ProjectNode): ProjectNode {
       throw new CommandError(`"${node.notBefore}" is not a valid not-before date-time`);
     }
   }
+  const resources = validRequirements(node, project);
   const clean: ProjectNode = {
     ...node,
     title,
@@ -70,6 +98,8 @@ function validNode(node: ProjectNode): ProjectNode {
     labels: [...new Set(node.labels.map((l) => l.trim()).filter(Boolean))],
     links: node.links.map((l) => l.trim()).filter(Boolean),
   };
+  if (resources.length) clean.resources = resources;
+  else delete clean.resources;
   if (clean.notBefore !== undefined) clean.notBefore = new Date(Date.parse(clean.notBefore)).toISOString();
   return clean;
 }
@@ -79,8 +109,6 @@ function findNode(project: Project, id: string): ProjectNode {
   if (!node) throw new CommandError(`No node with id "${id}"`);
   return node;
 }
-
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 function findType(project: Project, name: string): ResourceType {
   const type = (project.resourceTypes ?? []).find((t) => sameName(t.name, name));
@@ -109,7 +137,7 @@ const sameEdge = (a: Dependency, b: Dependency) => a.dependentId === b.dependent
 function apply(project: Project, command: Command): Project {
   switch (command.type) {
     case "addNode": {
-      const node = validNode(command.node);
+      const node = validNode(command.node, project);
       if (project.nodes.some((n) => n.id === node.id)) throw new CommandError(`A node with id "${node.id}" already exists`);
       return { ...project, nodes: [...project.nodes, node] };
     }
@@ -125,7 +153,7 @@ function apply(project: Project, command: Command): Project {
       const merged: ProjectNode = { ...current, ...rest, id: current.id };
       if (notBefore === null) delete merged.notBefore;
       else if (notBefore !== undefined) merged.notBefore = notBefore;
-      const node = validNode(merged);
+      const node = validNode(merged, project);
       return { ...project, nodes: project.nodes.map((n) => (n.id === node.id ? node : n)) };
     }
     case "removeNode": {
@@ -169,7 +197,14 @@ function apply(project: Project, command: Command): Project {
     }
     case "removeResourceType": {
       const type = findType(project, command.name);
-      return withTypes(project, (project.resourceTypes ?? []).filter((t) => t !== type));
+      // Work items can't keep asking for a type that no longer exists.
+      const nodes = project.nodes.map((n) => {
+        const kept = (n.resources ?? []).filter((r) => !sameName(r.typeName, type.name));
+        if (kept.length === (n.resources ?? []).length) return n;
+        const { resources: _dropped, ...rest } = n;
+        return kept.length ? { ...rest, resources: kept } : rest;
+      });
+      return withTypes({ ...project, nodes }, (project.resourceTypes ?? []).filter((t) => t !== type));
     }
     case "addResource": {
       const type = findType(project, command.typeName);
@@ -203,6 +238,8 @@ function inverseOf(before: Project, command: Command): Command[] {
       const changes: NodeChanges = {};
       for (const key of Object.keys(command.changes) as (keyof NodeChanges)[]) {
         if (key === "notBefore") changes.notBefore = current.notBefore ?? null;
+        // [] rather than undefined: undefined would vanish when the command is sent as JSON.
+        else if (key === "resources") changes.resources = current.resources ?? [];
         else (changes as Record<string, unknown>)[key] = current[key];
       }
       return [{ type: "updateNode", id: command.id, changes }];
@@ -225,6 +262,10 @@ function inverseOf(before: Project, command: Command): Command[] {
       return [
         { type: "addResourceType", name: type.name },
         ...type.resources.map((resource): Command => ({ type: "addResource", typeName: type.name, resource })),
+        // and the work items that needed it
+        ...before.nodes
+          .filter((n) => (n.resources ?? []).some((r) => sameName(r.typeName, type.name)))
+          .map((n): Command => ({ type: "updateNode", id: n.id, changes: { resources: n.resources } })),
       ];
     }
     case "addResource":

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "playwright/test";
-import { newProject, openFromList } from "./helpers.ts";
+import { details, newProject, openFromList } from "./helpers.ts";
 
 // Resourcing runs behind a feature flag: this spec talks to a second backend started with --resourcing.
 test.use({ baseURL: `http://127.0.0.1:${process.env.E2E_RESOURCING_PORT ?? 4320}` });
@@ -94,4 +94,75 @@ test("resource pool: a type name is required and unique", async ({ page }) => {
   await page.getByLabel("Resource type name").fill("developer");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("alert")).toContainText("already");
+});
+
+test("work item requirements: pick or create a type, raise and lower the number, keep it across a reload", async ({ page }) => {
+  const folder = await newProject(page, { start: "2026-11-02T09:00", root: "Release", work: "2d" });
+  const pool = page.getByRole("region", { name: "Resource pool" });
+  await pool.getByRole("button", { name: "Add resource type" }).click();
+  await page.getByLabel("Resource type name").fill("Developer");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  const panel = await details(page, "Release");
+  const needs = panel.getByRole("region", { name: "Resources needed" });
+  await expect(needs).toContainText("None yet");
+
+  // Pick an existing type: needs 1 to begin with
+  await needs.getByRole("button", { name: "Add resource requirement" }).click();
+  await needs.getByLabel("Resource type").selectOption("Developer");
+  await needs.getByRole("button", { name: "Add", exact: true }).click();
+  const dev = needs.getByTestId("requirement").filter({ hasText: "Developer" });
+  await expect(dev.getByTestId("requirement-count")).toHaveText("× 1");
+
+  // + and − set the number
+  await dev.getByRole("button", { name: "One more Developer" }).click();
+  await expect(dev.getByTestId("requirement-count")).toHaveText("× 2");
+
+  // Create a new type from here
+  await needs.getByRole("button", { name: "Add resource requirement" }).click();
+  await needs.getByLabel("Resource type").selectOption({ label: "New type…" });
+  await needs.getByLabel("New type name").fill("Designer");
+  await needs.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(needs.getByTestId("requirement").filter({ hasText: "Designer" }).getByTestId("requirement-count")).toHaveText("× 1");
+  await expect(pool.getByRole("button", { name: "Designer (0)" })).toBeVisible(); // it joined the pool too
+
+  // Already-picked types aren't offered again
+  await needs.getByRole("button", { name: "Add resource requirement" }).click();
+  await expect(needs.getByLabel("Resource type").locator("option")).toHaveText(["Choose…", "New type…"]);
+  await needs.getByRole("button", { name: "Cancel" }).click();
+
+  // Going below 1 drops the requirement
+  await needs.getByRole("button", { name: "One fewer Designer" }).click();
+  await expect(needs.getByTestId("requirement").filter({ hasText: "Designer" })).toHaveCount(0);
+
+  // Plain text in nodes.csv, and it survives reopening
+  await expect(async () => {
+    expect(await readFile(path.join(folder, "nodes.csv"), "utf8")).toContain("Developer x 2");
+  }).toPass();
+  await openFromList(page, folder);
+  const again = await details(page, "Release");
+  await expect(again.getByTestId("requirement-count")).toHaveText("× 2");
+
+  // Undo steps back through it
+  await again.getByRole("button", { name: "One fewer Developer" }).click();
+  await expect(again.getByTestId("requirement-count")).toHaveText("× 1");
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(again.getByTestId("requirement-count")).toHaveText("× 2");
+});
+
+test("work item requirements: removing a type from the pool clears it from work items", async ({ page }) => {
+  await newProject(page, { start: "2026-11-02T09:00", root: "Release", work: "2d" });
+  const pool = page.getByRole("region", { name: "Resource pool" });
+  await pool.getByRole("button", { name: "Add resource type" }).click();
+  await page.getByLabel("Resource type name").fill("Developer");
+  await page.getByRole("button", { name: "Save" }).click();
+  const needs = (await details(page, "Release")).getByRole("region", { name: "Resources needed" });
+  await needs.getByRole("button", { name: "Add resource requirement" }).click();
+  await needs.getByLabel("Resource type").selectOption("Developer");
+  await needs.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(needs.getByTestId("requirement")).toHaveCount(1);
+  await pool.getByRole("button", { name: "Remove type" }).click();
+  await expect(needs.getByTestId("requirement")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(needs.getByTestId("requirement")).toHaveCount(1);
 });

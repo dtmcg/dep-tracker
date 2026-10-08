@@ -71,3 +71,61 @@ describe("resource pool commands", () => {
     assert.deepEqual([...RESOURCE_COMMANDS].sort(), ["addResource", "addResourceType", "removeResource", "removeResourceType"]);
   });
 });
+
+describe("resource requirements on work items", () => {
+  const need = (typeName: string, count: number) => ({ typeName, count });
+  const set = (project: Project, resources: { typeName: string; count: number }[]) =>
+    applyCommands(project, [{ type: "updateNode", id: "n01", changes: { resources } }]);
+
+  it("lets a work item need a number of resources of a type, e.g. Developer x 2", () => {
+    const next = set(withDevs, [need("Developer", 2)]);
+    assert.deepEqual(next.nodes[0]!.resources, [need("Developer", 2)]);
+    assert.equal(withDevs.nodes[0]!.resources, undefined);
+  });
+
+  it("matches the type ignoring case and stores it as the pool names it", () => {
+    assert.deepEqual(set(withDevs, [need(" developer ", 1)]).nodes[0]!.resources, [need("Developer", 1)]);
+  });
+
+  it("can create the type and require it in one batch", () => {
+    const next = applyCommands(base, [
+      { type: "addResourceType", name: "Tester" },
+      { type: "updateNode", id: "n01", changes: { resources: [need("Tester", 3)] } },
+    ]);
+    assert.deepEqual(next.nodes[0]!.resources, [need("Tester", 3)]);
+  });
+
+  it("rejects a type that isn't in the pool, a count that isn't a whole number of at least 1, and a repeated type", () => {
+    assert.throws(() => set(withDevs, [need("Tester", 1)]), /not a resource type/);
+    for (const count of [0, -1, 1.5, Number.NaN]) assert.throws(() => set(withDevs, [need("Developer", count)]), /whole number/);
+    assert.throws(() => set(withDevs, [need("Developer", 1), need("developer", 2)]), /twice/);
+  });
+
+  it("clears the requirement with an empty list", () => {
+    const next = set(set(withDevs, [need("Developer", 2)]), []);
+    assert.equal("resources" in next.nodes[0]!, false);
+  });
+
+  it("refuses resources on a reference to another project", () => {
+    const withRef = applyCommands(withDevs, [
+      { type: "addNode", node: { id: "ref", title: "Other", workTime: "0m", labels: [], description: "", links: [], ref: { storage: { kind: "csv", path: "/x" } } } },
+    ]);
+    assert.throws(() => applyCommands(withRef, [{ type: "updateNode", id: "ref", changes: { resources: [need("Developer", 1)] } }]), /reference/);
+  });
+
+  it("drops a type's requirements from work items when the type is removed, and undo brings them back", () => {
+    const needing = set(withDevs, [need("Developer", 2)]);
+    const commands = [{ type: "removeResourceType", name: "Developer" }] as const;
+    const removed = applyCommands(needing, [...commands]);
+    assert.equal("resources" in removed.nodes[0]!, false);
+    assert.deepEqual(applyCommands(removed, invertCommands(needing, [...commands])), needing);
+  });
+
+  it("undoes a change of requirement, including setting the first one", () => {
+    const first = [{ type: "updateNode", id: "n01", changes: { resources: [need("Developer", 1)] } }] as const;
+    const after = applyCommands(withDevs, [...first]);
+    const undo = invertCommands(withDevs, [...first]);
+    assert.deepEqual(JSON.parse(JSON.stringify(undo)), undo, "survives being sent as JSON");
+    assert.deepEqual(applyCommands(after, undo).nodes[0]!.resources ?? [], []);
+  });
+});

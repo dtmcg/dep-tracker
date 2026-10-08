@@ -8,12 +8,20 @@ export interface ProjectNode {
   labels: string[];
   description: string;
   links: string[];
+  /** Resources this work item needs (Resourcing feature); none if absent or empty. */
+  resources?: ResourceRequirement[];
   /**
    * Set on a reference node (FR-6): it stands in for the success criteria of
    * the project stored at `ref.storage`. Its completion is that project's
    * completion; it has no work time of its own ("0m") and no dependencies.
    */
   ref?: ReferenceTarget;
+}
+
+/** What a work item needs from the resource pool: `count` resources of the named type, e.g. a Developer x 2. */
+export interface ResourceRequirement {
+  typeName: string;
+  count: number;
 }
 
 export interface ReferenceTarget {

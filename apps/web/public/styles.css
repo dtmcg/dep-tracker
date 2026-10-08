@@ -391,3 +391,8 @@ button.icon { min-width: 28px; padding: 2px 6px; font-size: 16px; line-height: 1
 .resource-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .resource-form label { display: grid; gap: 2px; font-size: 12px; color: var(--ink-quiet); }
 .resource-form input { width: auto; }
+.node-resources ul { margin: 0 0 6px; padding: 0; list-style: none; display: grid; gap: 4px; }
+.node-resources li { display: flex; align-items: center; gap: 10px; }
+.requirement-name { font-weight: 600; }
+.requirement-count { color: var(--ink-quiet); min-width: 32px; }
+.node-resources select { width: auto; }

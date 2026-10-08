@@ -1,6 +1,8 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { newId, parseReference, type ProjectNode, STORAGE_KINDS, type StorageDescriptor } from "@dep-tracker/domain";
 import { useDateFormatter } from "./dateDisplay.tsx";
+import { useFeatures } from "./features.tsx";
+import { changeCount, requireType } from "./resources.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { formChanges, type NodeForm, toForm } from "./nodeForm.ts";
 import { applyLocally, dependencyCommands, referenceCommands } from "./projectState.ts";
@@ -22,6 +24,7 @@ export function DetailsPanel({
   onOpenReference?: (storage: StorageDescriptor) => Promise<void>;
 }) {
   const formatDate = useDateFormatter();
+  const { resourcing } = useFeatures();
   const { snapshot } = session;
   const { project } = snapshot;
   const times = snapshot.schedule.nodes[node.id];
@@ -163,6 +166,8 @@ export function DetailsPanel({
 
           <NodeLabels node={node} session={session} />
 
+          {resourcing && !node.ref && <NodeResources node={node} session={session} />}
+
           <section className="relations" aria-label="Depends on">
             <h3>Depends on</h3>
             {dependencies.length === 0 ? (
@@ -201,6 +206,106 @@ export function DetailsPanel({
         </>
       )}
     </aside>
+  );
+}
+
+/** What this work item needs from the resource pool: pick a type (or name a new one), then adjust the number with + and −. */
+function NodeResources({ node, session }: { node: ProjectNode; session: Session }) {
+  const pool = session.snapshot.project.resourceTypes ?? [];
+  const needs = node.resources ?? [];
+  const canSave = session.snapshot.storage.kind === "csv";
+  const choices = pool.filter((t) => !needs.some((r) => r.typeName === t.name));
+  const NEW = "\u0000new";
+  const [choice, setChoice] = useState("");
+  const [newName, setNewName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const picking = choice === NEW ? newName : choice;
+  const add = () => {
+    try {
+      session.apply(requireType(node, pool, picking));
+      setChoice("");
+      setNewName("");
+      setAdding(false);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <section className="relations node-resources" aria-label="Resources needed">
+      <h3>Resources needed</h3>
+      {needs.length === 0 ? (
+        <p className="hint">None yet.</p>
+      ) : (
+        <ul>
+          {needs.map((r) => (
+            <li key={r.typeName} data-testid="requirement">
+              <span className="requirement-name">{r.typeName}</span>
+              <span className="requirement-count" data-testid="requirement-count" aria-label={`${r.count} ${r.typeName} needed`}>
+                × {r.count}
+              </span>
+              {canSave && (
+                <span className="resource-actions">
+                  <button className="ghost small icon" aria-label={`One more ${r.typeName}`} onClick={() => session.apply([changeCount(node, r.typeName, 1)])}>
+                    +
+                  </button>
+                  <button className="ghost small icon" aria-label={`One fewer ${r.typeName}`} onClick={() => session.apply([changeCount(node, r.typeName, -1)])}>
+                    −
+                  </button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!canSave && <p className="hint">This project's store can't hold resources yet; they are saved in CSV projects only for now.</p>}
+      {canSave && !adding && (
+        <button className="small" onClick={() => setAdding(true)}>
+          Add resource requirement
+        </button>
+      )}
+      {canSave && adding && (
+        <form
+          className="resource-form"
+          aria-label="New resource requirement"
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+        >
+          <label>
+            Resource type
+            <select value={choice} onChange={(e) => setChoice(e.target.value)}>
+              <option value="">Choose…</option>
+              {choices.map((t) => (
+                <option key={t.name} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+              <option value={NEW}>New type…</option>
+            </select>
+          </label>
+          {choice === NEW && (
+            <label>
+              New type name
+              <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Designer" />
+            </label>
+          )}
+          <button type="submit" className="small">
+            Add
+          </button>
+          <button type="button" className="ghost small" onClick={() => { setAdding(false); setError(null); }}>
+            Cancel
+          </button>
+          {error && (
+            <span className="field-error" role="alert">
+              {error}
+            </span>
+          )}
+        </form>
+      )}
+    </section>
   );
 }
 
