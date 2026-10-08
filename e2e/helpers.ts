@@ -20,7 +20,7 @@ export async function createProjectViaApi(
 /** On the Open tab: reveal the manual form if there are no known projects yet. */
 export async function showOpenForm(page: Page) {
   const reveal = page.getByRole("button", { name: "Open one from a specific location…" });
-  await reveal.or(page.getByLabel("Store")).first().waitFor();
+  await reveal.or(page.getByLabel("Project folder")).first().waitFor();
   if (await reveal.isVisible()) await reveal.click();
 }
 

@@ -68,11 +68,11 @@ describe("node form for a reference", () => {
     labels: [],
     description: "",
     links: [],
-    ref: { storage: { kind: "excel", path: "C:\\plans\\partner.xlsx" } },
+    ref: { storage: { kind: "csv", path: "C:\\plans\\partner" } },
   };
 
   it("shows where the reference points", () => {
-    assert.equal(toForm(ref).reference, "excel:C:\\plans\\partner.xlsx");
+    assert.equal(toForm(ref).reference, "csv:C:\\plans\\partner");
     assert.equal(toForm(node).reference, "");
   });
 
@@ -90,6 +90,6 @@ describe("node form for a reference", () => {
 
   it("says what is wrong with a reference", () => {
     const { errors } = formChanges(ref, { ...toForm(ref), reference: "word:/x" });
-    assert.match(errors.reference ?? "", /csv, excel, obsidian, gsheets/);
+    assert.match(errors.reference ?? "", /one of csv/);
   });
 });

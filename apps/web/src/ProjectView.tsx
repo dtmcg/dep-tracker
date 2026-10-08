@@ -66,7 +66,7 @@ function ProjectScreen({
           <span className="meta">
             {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDate(project.start)} ·{" "}
             <span className="mono" title={snapshot.storage.path}>
-              {{ csv: "CSV", excel: "Excel", obsidian: "Obsidian", gsheets: "Google Sheet" }[snapshot.storage.kind]}: {snapshot.storage.path}
+              {{ csv: "CSV" }[snapshot.storage.kind]}: {snapshot.storage.path}
             </span>
           </span>
         </div>
@@ -132,7 +132,7 @@ function ProjectScreen({
         onColour={(label, colour) => session.apply([{ type: "setLabelColour", label, colour }])}
       />
 
-      {resourcing && <ResourcePool project={project} saved={snapshot.storage.kind === "csv"} onApply={session.apply} />}
+      {resourcing && <ResourcePool project={project} onApply={session.apply} />}
 
       <div className={selected ? "workspace with-panel" : "workspace"}>
         <Gantt

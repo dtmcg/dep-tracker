@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { newId, parseReference, type ProjectNode, STORAGE_KINDS, type StorageDescriptor } from "@dep-tracker/domain";
+import { describeConsumption, newId, nodeConsumption, parseReference, type ProjectNode, STORAGE_KINDS, type StorageDescriptor } from "@dep-tracker/domain";
 import { useDateFormatter } from "./dateDisplay.tsx";
 import { useFeatures } from "./features.tsx";
 import { changeCount, requireType } from "./resources.ts";
@@ -9,7 +9,7 @@ import { applyLocally, dependencyCommands, referenceCommands } from "./projectSt
 import type { Session } from "./useProjectSession.ts";
 
 /** Side panel for the selected node (FR-7, FR-8, FR-9, FR-10). */
-const KIND_NAMES: Record<StorageDescriptor["kind"], string> = { csv: "CSV folder", excel: "Excel file", obsidian: "Obsidian folder", gsheets: "Google Sheet" };
+const KIND_NAMES: Record<StorageDescriptor["kind"], string> = { csv: "CSV folder" };
 
 export function DetailsPanel({
   node,
@@ -213,8 +213,8 @@ export function DetailsPanel({
 function NodeResources({ node, session }: { node: ProjectNode; session: Session }) {
   const pool = session.snapshot.project.resourceTypes ?? [];
   const needs = node.resources ?? [];
-  const canSave = session.snapshot.storage.kind === "csv";
   const choices = pool.filter((t) => !needs.some((r) => r.typeName === t.name));
+  const consumption = nodeConsumption(node);
   const NEW = "\u0000new";
   const [choice, setChoice] = useState("");
   const [newName, setNewName] = useState("");
@@ -245,7 +245,10 @@ function NodeResources({ node, session }: { node: ProjectNode; session: Session 
               <span className="requirement-count" data-testid="requirement-count" aria-label={`${r.count} ${r.typeName} needed`}>
                 × {r.count}
               </span>
-              {canSave && (
+              <span className="requirement-use" data-testid="requirement-consumption">
+                uses {describeConsumption(consumption.find((c) => c.typeName === r.typeName)!)}
+              </span>
+              {(
                 <span className="resource-actions">
                   <button className="ghost small icon" aria-label={`One more ${r.typeName}`} onClick={() => session.apply([changeCount(node, r.typeName, 1)])}>
                     +
@@ -259,13 +262,12 @@ function NodeResources({ node, session }: { node: ProjectNode; session: Session 
           ))}
         </ul>
       )}
-      {!canSave && <p className="hint">This project's store can't hold resources yet; they are saved in CSV projects only for now.</p>}
-      {canSave && !adding && (
+      {!adding && (
         <button className="small" onClick={() => setAdding(true)}>
           Add resource requirement
         </button>
       )}
-      {canSave && adding && (
+      {adding && (
         <form
           className="resource-form"
           aria-label="New resource requirement"

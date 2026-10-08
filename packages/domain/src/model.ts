@@ -63,12 +63,11 @@ export interface Project {
   resourceTypes?: ResourceType[];
 }
 
-/** Where a project is stored. */
-export type StorageDescriptor =
-  | { kind: "csv"; path: string }
-  | { kind: "excel"; path: string }
-  | { kind: "obsidian"; path: string }
-  | { kind: "gsheets"; path: string };
+/**
+ * Where a project is stored. Only CSV folders for now; another store is one more member of this union, one more
+ * entry in STORAGE_KINDS, and an adapter that passes the storage conformance suite.
+ */
+export type StorageDescriptor = { kind: "csv"; path: string };
 
 export interface LoadedProject {
   project: Project;

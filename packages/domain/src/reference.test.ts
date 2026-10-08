@@ -10,22 +10,21 @@ describe("formatReference / parseReference", () => {
   });
 
   it("keeps Windows drive letters and colons in the path", () => {
-    assert.deepEqual(parseReference("excel:C:\\plans\\partner.xlsx"), { kind: "excel", path: "C:\\plans\\partner.xlsx" });
-    assert.deepEqual(parseReference("gsheets:1AbC_dEf-123"), { kind: "gsheets", path: "1AbC_dEf-123" });
+    assert.deepEqual(parseReference("csv:C:\\plans\\partner"), { kind: "csv", path: "C:\\plans\\partner" });
   });
 
   it("trims whitespace and accepts any case for the kind", () => {
-    assert.deepEqual(parseReference("  Obsidian:/vault/partner  "), { kind: "obsidian", path: "/vault/partner" });
+    assert.deepEqual(parseReference("  CSV:/vault/partner  "), { kind: "csv", path: "/vault/partner" });
   });
 
-  for (const bad of ["", "csv", "csv:", ":/plans", "word:/plans/x.docx", "/plans/partner"]) {
+  for (const bad of ["", "csv", "csv:", ":/plans", "word:/plans/x.docx", "excel:/plans/x.xlsx", "/plans/partner"]) {
     it(`rejects ${JSON.stringify(bad)}`, () => {
       assert.throws(() => parseReference(bad), ReferenceError);
     });
   }
 
   it("says what is wrong and what is allowed", () => {
-    assert.throws(() => parseReference("word:/x"), /word.*csv, excel, obsidian, gsheets/s);
+    assert.throws(() => parseReference("word:/x"), /word.*csv/s);
   });
 });
 
@@ -35,16 +34,11 @@ describe("storageKey", () => {
     assert.equal(storageKey({ kind: "csv", path: "/plans/a" }), storageKey({ kind: "csv", path: "/plans/./a" }));
   });
 
-  it("differs by kind and by path", () => {
-    assert.notEqual(storageKey({ kind: "csv", path: "/plans/a" }), storageKey({ kind: "excel", path: "/plans/a" }));
+  it("differs by path", () => {
     assert.notEqual(storageKey({ kind: "csv", path: "/plans/a" }), storageKey({ kind: "csv", path: "/plans/b" }));
   });
 
   it("ignores case and slash direction in Windows paths", () => {
     assert.equal(storageKey({ kind: "csv", path: "C:\\Plans\\A" }), storageKey({ kind: "csv", path: "c:/plans/a" }));
-  });
-
-  it("keeps Google Sheet ids exactly as written", () => {
-    assert.notEqual(storageKey({ kind: "gsheets", path: "AbC" }), storageKey({ kind: "gsheets", path: "abc" }));
   });
 });

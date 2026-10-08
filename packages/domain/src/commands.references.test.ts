@@ -36,8 +36,8 @@ describe("reference nodes in commands", () => {
   });
 
   it("trims the target path", () => {
-    const p = applyCommands(base(), [{ type: "addNode", node: refNode({ ref: { storage: { kind: "excel", path: "  /plans/partner.xlsx " } } }) }]);
-    assert.deepEqual(p.nodes[1]?.ref, { storage: { kind: "excel", path: "/plans/partner.xlsx" } });
+    const p = applyCommands(base(), [{ type: "addNode", node: refNode({ ref: { storage: { kind: "csv", path: "  /plans/partner " } } }) }]);
+    assert.deepEqual(p.nodes[1]?.ref, { storage: { kind: "csv", path: "/plans/partner" } });
   });
 
   it("rejects a reference to an unknown kind of store or an empty path", () => {
@@ -90,8 +90,8 @@ describe("reference nodes in commands", () => {
 
   it("can point a reference at a different project", () => {
     const p = applyCommands(base(), [{ type: "addNode", node: refNode() }]);
-    const next = applyCommands(p, [{ type: "updateNode", id: "ext", changes: { ref: { storage: { kind: "obsidian", path: "/vault/partner" } } } }]);
-    assert.deepEqual(next.nodes[1]?.ref, { storage: { kind: "obsidian", path: "/vault/partner" } });
+    const next = applyCommands(p, [{ type: "updateNode", id: "ext", changes: { ref: { storage: { kind: "csv", path: "/vault/other" } } } }]);
+    assert.deepEqual(next.nodes[1]?.ref, { storage: { kind: "csv", path: "/vault/other" } });
   });
 
   it("refuses to turn an ordinary node into a reference", () => {

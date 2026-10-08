@@ -6,7 +6,7 @@ import { projectsFolderPrefix, suggestFolder } from "./folders.ts";
 type Tab = "open" | "new" | "import";
 type Kind = StorageDescriptor["kind"];
 
-/** The stores a project can live in, with what the location field asks for. */
+/** The stores a project can live in, with what the location field asks for. Another store is one more entry here (and in the domain). */
 export const STORES: { kind: Kind; name: string; location: string; hint: string; placeholder: string }[] = [
   {
     kind: "csv",
@@ -15,30 +15,11 @@ export const STORES: { kind: Kind; name: string; location: string; hint: string;
     hint: "A folder containing project.csv, nodes.csv and edges.csv.",
     placeholder: "C:\\Users\\you\\projects\\my-plan",
   },
-  {
-    kind: "excel",
-    name: "Excel workbook",
-    location: "Workbook file",
-    hint: "An .xlsx file with Project and Tasks sheets.",
-    placeholder: "C:\\Users\\you\\Documents\\my-plan.xlsx",
-  },
-  {
-    kind: "obsidian",
-    name: "Obsidian vault folder",
-    location: "Vault folder",
-    hint: "A folder inside your vault holding one note per task and a \"(project)\" note.",
-    placeholder: "C:\\Users\\you\\Vault\\Projects\\my-plan",
-  },
-  {
-    kind: "gsheets",
-    name: "Google Sheet",
-    location: "Spreadsheet link",
-    hint: "Paste the sheet's link. For a new project, start from a blank sheet (sheets.new).",
-    placeholder: "https://docs.google.com/spreadsheets/d/…",
-  },
 ];
 const storeOf = (kind: Kind) => STORES.find((s) => s.kind === kind)!;
 
+// Importing copies a project from one kind of store to another, so it only appears once there are two.
+const TABS: Tab[] = STORES.length > 1 ? ["open", "new", "import"] : ["open", "new"];
 const TAB_NAMES: Record<Tab, string> = { open: "Open project", new: "New project", import: "Import" };
 
 export function StartScreen({ api, onOpened }: { api: Api; onOpened: (project: OpenedProject) => void }) {
@@ -66,7 +47,7 @@ export function StartScreen({ api, onOpened }: { api: Api; onOpened: (project: O
   return (
     <section className="start">
       <div className="tabs" role="tablist" aria-label="Open or create a project">
-        {(["open", "new", "import"] as const).map((t) => (
+        {TABS.map((t) => (
           <button
             key={t}
             role="tab"
@@ -100,6 +81,8 @@ export function StartScreen({ api, onOpened }: { api: Api; onOpened: (project: O
 }
 
 function StoreSelect({ id, label, value, onChange }: { id: string; label: string; value: Kind; onChange: (kind: Kind) => void }) {
+  // With a single kind of store there is nothing to choose.
+  if (STORES.length < 2) return null;
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
@@ -110,64 +93,6 @@ function StoreSelect({ id, label, value, onChange }: { id: string; label: string
           </option>
         ))}
       </select>
-    </div>
-  );
-}
-
-/** Google sign-in status, and the button that starts it (S9). */
-function GoogleConnect({ api }: { api: Api }) {
-  const [status, setStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
-  const [waiting, setWaiting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let stopped = false;
-    const check = () =>
-      api
-        .googleStatus()
-        .then((s) => !stopped && setStatus(s))
-        .catch(() => undefined);
-    void check();
-    // While waiting for the consent tab, watch for the sign-in to land.
-    const timer = waiting ? setInterval(check, 1000) : undefined;
-    return () => {
-      stopped = true;
-      if (timer) clearInterval(timer);
-    };
-  }, [api, waiting]);
-
-  useEffect(() => {
-    if (status?.connected) setWaiting(false);
-  }, [status?.connected]);
-
-  if (!status) return null;
-  if (!status.configured) {
-    return (
-      <p className="hint wide google-status">
-        Google Sheets needs a Google Cloud OAuth client. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and restart the app (see the README).
-      </p>
-    );
-  }
-  if (status.connected) return <p className="hint wide google-status connected">✓ Connected to Google</p>;
-  return (
-    <div className="wide google-status">
-      <button
-        type="button"
-        className="ghost"
-        onClick={async () => {
-          setError(null);
-          try {
-            window.open(await api.googleStart(), "_blank", "popup,width=520,height=680");
-            setWaiting(true);
-          } catch (e) {
-            setError((e as Error).message);
-          }
-        }}
-      >
-        Connect Google account
-      </button>
-      <span className="hint">{waiting ? " Waiting for you to finish signing in…" : " Opens Google's sign-in page."}</span>
-      {error && <p className="field-error">{error}</p>}
     </div>
   );
 }
@@ -183,7 +108,8 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
   const [showManual, setShowManual] = useState(false);
   const [picked, setPicked] = useState("");
   useEffect(() => {
-    api.library().then(setKnown, () => undefined);
+    // A list written when more kinds of store existed may name one this build can't open; leave those out.
+    api.library().then((list) => setKnown(list.filter((p) => STORES.some((s) => s.kind === p.storage.kind))), () => undefined);
   }, [api]);
   const keyOf = (p: KnownProject) => `${p.storage.kind}:${p.storage.path}`;
   const choose = (key: string) => {
@@ -247,7 +173,6 @@ function OpenForm({ api, projectsDir, busy, onSubmit }: { api: Api; projectsDir:
         </div>
       )}
       <StoreSelect id="open-store" label="Store" value={kind} onChange={(k) => { setKind(k); setTyped(null); setPicked(""); }} />
-      {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="open-location">{store.location}</label>
         <div className="row">
@@ -307,7 +232,6 @@ function NewForm({
       }}
     >
       <StoreSelect id="new-store" label="Store" value={kind} onChange={(k) => { setKind(k); setTyped(null); }} />
-      {kind === "gsheets" && <GoogleConnect api={api} />}
       <div className="field wide">
         <label htmlFor="new-location">{locationLabel}</label>
         <input
@@ -321,13 +245,9 @@ function NewForm({
           required
         />
         <p className="hint">
-          {kind === "excel"
-            ? "A new .xlsx file; it must not exist yet."
-            : kind === "gsheets"
-              ? "A blank Google Sheet you can edit (create one at sheets.new)."
-              : kind === "csv" && projectsDir
-                ? "Created if it doesn't exist. Defaults to a folder named after the project, inside your projects folder."
-                : "Created if it doesn't exist. Must not already hold a project."}
+          {kind === "csv" && projectsDir
+            ? "Created if it doesn't exist. Defaults to a folder named after the project, inside your projects folder."
+            : "Created if it doesn't exist. Must not already hold a project."}
         </p>
       </div>
       <div className="field">
@@ -366,7 +286,7 @@ function ImportForm({
 }) {
   const [fromKind, setFromKind] = useState<Kind>("csv");
   const [from, setFrom] = useState("");
-  const [toKind, setToKind] = useState<Kind>("excel");
+  const [toKind, setToKind] = useState<Kind>("csv");
   const [to, setTo] = useState("");
   return (
     <form
@@ -386,7 +306,6 @@ function ImportForm({
         <label htmlFor="import-to">To location</label>
         <input id="import-to" className="mono" type="text" value={to} onChange={(e) => setTo(e.target.value)} placeholder={storeOf(toKind).placeholder} required />
       </div>
-      {(fromKind === "gsheets" || toKind === "gsheets") && <GoogleConnect api={api} />}
       <p className="hint wide">The original is left untouched; the copy opens, and edits go to the copy.</p>
       <div className="actions wide">
         <button type="submit" disabled={busy}>

@@ -7,7 +7,8 @@ export class ReferenceError extends Error {
   }
 }
 
-export const STORAGE_KINDS = ["csv", "excel", "obsidian", "gsheets"] as const;
+/** Kinds of store a project can live in (and so a reference can point at). */
+export const STORAGE_KINDS = ["csv"] as const;
 
 /** A reference target as one cell or frontmatter value: "kind:path", e.g. "csv:C:\plans\partner". */
 export function formatReference(storage: StorageDescriptor): string {
@@ -33,7 +34,6 @@ export function parseReference(text: string): StorageDescriptor {
  * path counts once (used to spot loops of references between projects).
  */
 export function storageKey(storage: StorageDescriptor): string {
-  if (storage.kind === "gsheets") return `gsheets:${storage.path.trim()}`;
   const normal = storage.path
     .trim()
     .replace(/\\/g, "/")

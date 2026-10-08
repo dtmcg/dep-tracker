@@ -5,3 +5,4 @@ export * from "./ids.ts";
 export * from "./model.ts";
 export * from "./schedule.ts";
 export * from "./reference.ts";
+export * from "./consumption.ts";

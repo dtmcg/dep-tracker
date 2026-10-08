@@ -68,9 +68,9 @@ describe("resolveReferences", () => {
 
   it("reports a reference to a storage kind the app can't open", async () => {
     const mine = await folder();
-    const project = await store(mine, "Mine", [node("root", "Release", "1d"), ref("ext", "Odd", { kind: "obsidian", path: "/v" })]);
+    const project = await store(mine, "Mine", [node("root", "Release", "1d"), ref("ext", "Odd", { kind: "excel", path: "/v" } as never)]);
     const { externals } = await resolveReferences(project, mine, adapterFor);
-    assert.match((externals.ext as { error: string }).error, /obsidian/);
+    assert.match((externals.ext as { error: string }).error, /excel/);
   });
 
   it("spots a loop of projects and names it", async () => {

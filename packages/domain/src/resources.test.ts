@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyCommands, CommandError, invertCommands, RESOURCE_COMMANDS } from "./commands.ts";
+import { applyCommands, type Command, CommandError, invertCommands, RESOURCE_COMMANDS } from "./commands.ts";
 import type { Project } from "./model.ts";
 
 const base: Project = {
@@ -122,10 +122,21 @@ describe("resource requirements on work items", () => {
   });
 
   it("undoes a change of requirement, including setting the first one", () => {
-    const first = [{ type: "updateNode", id: "n01", changes: { resources: [need("Developer", 1)] } }] as const;
-    const after = applyCommands(withDevs, [...first]);
-    const undo = invertCommands(withDevs, [...first]);
+    const first: Command[] = [{ type: "updateNode", id: "n01", changes: { resources: [need("Developer", 1)] } }];
+    const after = applyCommands(withDevs, first);
+    const undo = invertCommands(withDevs, first);
     assert.deepEqual(JSON.parse(JSON.stringify(undo)), undo, "survives being sent as JSON");
     assert.deepEqual(applyCommands(after, undo).nodes[0]!.resources ?? [], []);
+  });
+});
+
+describe("resources and the schedule", () => {
+  it("never change a work item's duration: allocating more resources leaves every date as it was", async () => {
+    const { schedule } = await import("./schedule.ts");
+    const plain = applyCommands(withDevs, [{ type: "updateNode", id: "n01", changes: { workTime: "3d" } }]);
+    const many = applyCommands(plain, [{ type: "updateNode", id: "n01", changes: { resources: [{ typeName: "Developer", count: 2 }] } }]);
+    const more = applyCommands(many, [{ type: "updateNode", id: "n01", changes: { resources: [{ typeName: "Developer", count: 9 }] } }]);
+    assert.deepEqual(schedule(many).nodes, schedule(plain).nodes);
+    assert.deepEqual(schedule(more).nodes, schedule(plain).nodes);
   });
 });

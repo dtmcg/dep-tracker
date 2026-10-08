@@ -166,3 +166,26 @@ test("work item requirements: removing a type from the pool clears it from work 
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(needs.getByTestId("requirement")).toHaveCount(1);
 });
+
+test("resource consumption: each allocated resource uses the full work time, and the pool adds it up", async ({ page }) => {
+  await newProject(page, { start: "2026-11-02T09:00", root: "Release", work: "3d" });
+  const pool = page.getByRole("region", { name: "Resource pool" });
+  await pool.getByRole("button", { name: "Add resource type" }).click();
+  await page.getByLabel("Resource type name").fill("Developer");
+  await page.getByRole("button", { name: "Save" }).click();
+  const completion = (await details(page, "Release")).getByTestId("detail-completion");
+  const before = await completion.textContent();
+  const needs = (await details(page, "Release")).getByRole("region", { name: "Resources needed" });
+  await needs.getByRole("button", { name: "Add resource requirement" }).click();
+  await needs.getByLabel("Resource type").selectOption("Developer");
+  await needs.getByRole("button", { name: "Add", exact: true }).click();
+  const use = needs.getByTestId("requirement-consumption");
+  await expect(use).toHaveText("uses 3d");
+  await needs.getByRole("button", { name: "One more Developer" }).click();
+  await expect(use).toHaveText("uses 3d each, 6d in all");
+  await needs.getByRole("button", { name: "One more Developer" }).click();
+  await expect(use).toHaveText("uses 3d each, 1w 2d in all");
+  await expect(pool.getByTestId("type-consumption")).toHaveText("Work items use 1w 2d of developer time across 1 item.");
+  // more resources don't change the dates
+  await expect(completion).toHaveText(before!);
+});

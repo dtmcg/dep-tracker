@@ -53,7 +53,7 @@ export function richProject(): Project {
         labels: ["team:partner"],
         description: "Delivered by the partner team's own plan",
         links: [],
-        ref: { storage: { kind: "excel", path: "C:\\plans\\partner, v2.xlsx" } },
+        ref: { storage: { kind: "csv", path: "C:\\plans\\partner, v2" } },
       },
     ],
     edges: [

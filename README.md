@@ -1,6 +1,6 @@
 # dep-tracker
 
-Project Dependency Manager: a locally run web app that models a project as a dependency graph rooted in its success criteria and shows when each item can realistically finish, as a graph-based Gantt chart. Projects live in CSV, Excel, Google Sheets or Obsidian.
+Project Dependency Manager: a locally run web app that models a project as a dependency graph rooted in its success criteria and shows when each item can realistically finish, as a graph-based Gantt chart. Projects live in CSV folders. Storage sits behind an adapter interface, so other stores can be added later (see Storage).
 
 The product requirements are in [features/PRD.md](features/PRD.md). Work is delivered as thin end-to-end slices, each built test-first.
 
@@ -15,9 +15,7 @@ The product requirements are in [features/PRD.md](features/PRD.md). Work is deli
 | S4 Cycles | Cycles flagged with a banner, dependents blocked, the rest still dated; orphans flagged | Done |
 | S5 Selection and animation | Dependencies and dependents highlighted, rest dimmed, critical chain emphasised, dashes flow at a speed scaled to work time | Done |
 | S6 Labels | Labels with autocomplete, a label key with counts, saved colours (presets or picker), toggled highlighting | Done |
-| S7 Excel adapter | Open, create and edit .xlsx workbooks; import between stores; export to CSV | Done |
-| S8 Obsidian adapter | One note per task in a vault folder, wikilink dependencies, tags for labels | Done |
-| S9 Google Sheets adapter | Sign in with Google, then create in, open and edit Google Sheets; outside edits picked up within seconds | Done |
+| S7–S9 Excel, Obsidian and Google Sheets adapters | Built, then removed to focus on CSV (still in the git history) | Parked |
 | S10 Cross-project references | Reference another project's root; its date flows in, unreadable or looping references are flagged, edits to the other project are picked up | Done |
 | S11 UI styles | Light, Dark, High contrast and Blueprint styles, switchable from the header and remembered; follows your system until you choose | Done |
 
@@ -46,12 +44,7 @@ Open http://127.0.0.1:4317, paste the full path of a project folder (try `fixtur
 
 ```
 packages/domain        Model, duration parsing, scheduling engine (shared by server and web)
-packages/adapter-csv   CSV storage adapter
-packages/adapter-excel Excel (.xlsx) storage adapter
-packages/xlsx          Minimal dependency-free .xlsx reader/writer (zip + SpreadsheetML)
-packages/adapter-obsidian  Obsidian vault folder adapter (notes with frontmatter)
-packages/adapter-gsheets   Google Sheets adapter, Google sign-in, and a stand-in Google service for tests
-packages/sheet-layout      The Project / Tasks / Labels layout shared by Excel and Google Sheets
+packages/adapter-csv   CSV storage adapter (the only store for now)
 packages/storage-conformance  Shared test suite every storage adapter must pass
 apps/server            Local API server (node:http), also serves the built web app
 apps/web               React UI, bundled with esbuild
@@ -73,68 +66,15 @@ edges.csv     dependent_id, dependency_id   (optional while a project has no dep
 labels.csv    label, colour                 (optional; colours as #rrggbb)
 ```
 
-## Excel workbook format
+## Storage
 
-One .xlsx file with three sheets, made to be read and edited by hand:
+CSV is the only store for now. The rest of the app doesn't know that: the server talks to a `StorageAdapter` (`packages/domain/src/model.ts`: `load`, `version`, `create`, `save`), the browser only ever sees a `StorageDescriptor` (`{ kind, path }`), and every adapter must pass the shared suite in `packages/storage-conformance`. To add a store later:
 
-- **Project**: Field / Value rows for ID, Name, Start (a real date cell) and Success criteria (a task title).
-- **Tasks**: one row per task with ID, Title, Work time (e.g. `3d`), Not before, Depends on, Labels, Description, Links, and greyed Starts / Completes columns that the app fills in and never reads back. Depends on lists dependency titles separated by semicolons; write `Title [id]` when two tasks share a title. A row you add without an ID gets one on the next save.
-- **Labels**: Label / Colour (`#rrggbb`).
+1. Add its descriptor to the `StorageDescriptor` union and its kind to `STORAGE_KINDS` (`packages/domain`).
+2. Write an adapter package that passes `storage-conformance` (copy `packages/adapter-csv/src/conformance.test.ts`).
+3. Register it in `apps/server/src/main.ts` (`adapters: { csv: csvAdapter, … }`) and add an entry to `STORES` in `apps/web/src/StartScreen.tsx`. The Store drop-down and the Import tab appear on their own once there is more than one store.
 
-When the app saves, your own extra columns in Tasks and any other sheets you add are kept. Formatting you apply to the three sheets above is not.
-
-## Obsidian vault format
-
-A folder inside your vault, with one note per task named after its title:
-
-```markdown
----
-id: n02
-work_time: 1w
-not_before: 2026-11-02T09:00
-depends_on:
-  - "[[API contract agreed]]"
-tags:
-  - team/platform
-links:
-  - https://example.com/spec
----
-The note body is the task's description.
-```
-
-- Dependencies are wikilinks, so Obsidian's graph view shows the plan. Renaming a note in Obsidian (which updates links) keeps its edges.
-- Labels are tags; a `:` in a label is written as `/` (`team:web` ↔ `#team/web`), because Obsidian tags can't contain colons.
-- A project note, `<project name> (project).md`, holds `dep_tracker: project`, `start`, `success_criteria: "[[Task]]"` and `label_colours`.
-- A note you create by hand becomes a task when it has a `work_time`; it gets an `id` on the next save. Notes without `id` or `work_time` are left alone.
-- When the app saves, it keeps note bodies and frontmatter keys it doesn't own. A task deleted in the app moves to the folder's `.trash`, and the previous text of every changed note is kept in `.dep-tracker-backup`. Both are hidden from Obsidian.
-- Times are stored to the minute in local time, which is the format Obsidian's date-time properties use. The PRD suggested naming the root note after the project. I gave the project its own note instead, because the success criteria task already has its own title.
-
-## Google Sheets
-
-Projects in Google Sheets use the same Project / Tasks / Labels layout as Excel. To create one, make a blank sheet (sheets.new) and paste its link into New project. To open a project sheet, paste its link into Open.
-
-### One-time setup
-
-Google needs your own OAuth client:
-
-1. In Google Cloud console, create a project and enable the **Google Sheets API**.
-2. Under **OAuth consent screen**, set up an External app in Testing mode and add your Google account as a test user.
-3. Under **Credentials**, create an **OAuth client ID** of type **Desktop app**.
-4. Start dep-tracker with its ID and secret:
-
-   ```powershell
-   $env:GOOGLE_CLIENT_ID = "…apps.googleusercontent.com"
-   $env:GOOGLE_CLIENT_SECRET = "…"
-   npm start
-   ```
-
-5. On the start screen, choose **Google Sheet**, then **Connect Google account**.
-
-Sign-in uses OAuth for installed apps with a loopback redirect (back to 127.0.0.1) and PKCE. Only the refresh token is kept, in `~/.dep-tracker/google-token.json`, readable by your user only. The PRD asks for the OS keychain; that needs a native module, so it's a follow-up. Set `DEP_TRACKER_CONFIG_DIR` to keep the token somewhere else.
-
-Values are written exactly as typed, so a title like `=1+1` stays text. Dates are stored in the spreadsheet's own time zone. If you rename a task in the sheet, its links stay intact, because the app remembers titles from its last read and the next save updates Depends on.
-
-The tests run against a stand-in for Google's sign-in and Sheets endpoints (`packages/adapter-gsheets/src/fake-google.ts`), not the real service.
+The Excel (.xlsx), Obsidian vault and Google Sheets adapters were built and then removed; they are in the git history (before the commit that removed them) if you want them back.
 
 ## Stack choices
 
@@ -154,7 +94,7 @@ The server binds to 127.0.0.1 only and generates a per-launch token, which it wr
 
 ## Referencing another project
 
-A node can stand in for another project's success criteria ("Add reference to another project" in the node details). Its completion comes from that project; its own work time and not-before date are ignored. In the files it is a single `reference` value written as `kind:path`, e.g. `csv:C:\plans\partner`, `excel:/home/me/partner.xlsx`, `obsidian:/vault/partner`, `gsheets:<sheet id>`. Edit it by hand if you like. A reference that can't be read is flagged "unresolved" and blocks what depends on it; projects that reference each other in a loop are reported and not timed.
+A node can stand in for another project's success criteria ("Add reference to another project" in the node details). Its completion comes from that project; its own work time and not-before date are ignored. In the files it is a single `reference` value written as `kind:path`, e.g. `csv:C:\plans\partner`. Edit it by hand if you like. A reference that can't be read is flagged "unresolved" and blocks what depends on it; projects that reference each other in a loop are reported and not timed.
 
 ## Where projects are kept
 
@@ -195,10 +135,10 @@ With it on, each project shows a **Resources** strip under the label key: a reso
 - Beside every instance, **+** adds another with the same details (right after it) and **−** removes it. Edits can be undone like any other.
 - **Remove type** deletes a type and its instances.
 
-The pool is saved in the project's CSV folder as `resource_types.csv` (`type`) and `resources.csv` (`type,id,name,available`), which are only created once a pool exists and are easy to edit by hand. Excel, Obsidian and Google Sheets projects don't hold a resource pool yet; the strip is read-only for them with a note saying so. Without the flag, the strip is hidden and the server refuses resource commands.
+The pool is saved in the project's CSV folder as `resource_types.csv` (`type`) and `resources.csv` (`type,id,name,available`), which are only created once a pool exists and are easy to edit by hand. Without the flag, the strip is hidden and the server refuses resource commands.
 
 ### Resource requirements on work items
 
 With `--resourcing` on, a selected work item's details panel has a **Resources needed** section. **Add resource requirement** lets you choose one of the pool's types, or **New type…** to create one on the spot (it joins the pool too). A requirement starts at 1; the **+** and **−** beside it change the number needed (a Developer × 2), and **−** at 1 removes it. A type can appear once per work item, and references to other projects can't have requirements.
 
-In CSV projects it is saved in a `resources` column of `nodes.csv`, e.g. `Developer x 2; Tester` (a type with no number needs 1). The column only appears once some work item needs a resource. Removing a type from the pool also clears it from the work items that needed it (undo restores both).
+It is saved in a `resources` column of `nodes.csv`, e.g. `Developer x 2; Tester` (a type with no number needs 1). The column only appears once some work item needs a resource. Removing a type from the pool also clears it from the work items that needed it (undo restores both).

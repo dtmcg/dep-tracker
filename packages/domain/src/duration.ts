@@ -24,3 +24,17 @@ export function parseDuration(input: string): number {
     Number(w ?? 0) * UNIT_MS.w + Number(d ?? 0) * UNIT_MS.d + Number(h ?? 0) * UNIT_MS.h + Number(m ?? 0) * UNIT_MS.m
   );
 }
+
+/** Milliseconds as a duration string, largest units first: "1w 2d", "4h 30m"; zero is "0m". Partial minutes are dropped. */
+export function formatDuration(ms: number): string {
+  let rest = Math.max(0, Math.floor(ms / MINUTE_MS));
+  if (rest === 0) return "0m";
+  const parts: string[] = [];
+  for (const unit of ["w", "d", "h", "m"] as const) {
+    const size = UNIT_MS[unit] / MINUTE_MS;
+    const n = Math.floor(rest / size);
+    rest -= n * size;
+    if (n) parts.push(`${n}${unit}`);
+  }
+  return parts.join(" ");
+}

@@ -1,19 +1,18 @@
 import { type FormEvent, useState } from "react";
-import type { Command, Project, ResourceType } from "@dep-tracker/domain";
+import { formatDuration, projectConsumption, type Command, type Project, type ResourceType, type TypeConsumption } from "@dep-tracker/domain";
 import { addInstance, cloneInstance, removeInstance, resourceLabel } from "./resources.ts";
 
 interface ResourcePoolProps {
   project: Project;
-  /** False when the project's store can't hold a resource pool yet; the pool is then read-only. */
-  saved: boolean;
   onApply: (commands: Command[]) => void;
 }
 
 /** The project's resource pool (Resourcing feature): types you click to expand, each with its instances. */
-export function ResourcePool({ project, saved, onApply }: ResourcePoolProps) {
+export function ResourcePool({ project, onApply }: ResourcePoolProps) {
   const types = project.resourceTypes ?? [];
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [definingType, setDefiningType] = useState(false);
+  const consumption = projectConsumption(project);
   const toggle = (name: string) =>
     setOpen((current) => {
       const next = new Set(current);
@@ -35,7 +34,7 @@ export function ResourcePool({ project, saved, onApply }: ResourcePoolProps) {
             </li>
           ))}
         </ul>
-        {saved && !definingType && (
+        {!definingType && (
           <button className="ghost small" onClick={() => setDefiningType(true)}>
             Add resource type
           </button>
@@ -52,13 +51,8 @@ export function ResourcePool({ project, saved, onApply }: ResourcePoolProps) {
           />
         )}
       </div>
-      {!saved && (
-        <p className="resource-note" role="note">
-          This project's store can't hold resources yet; they are saved in CSV projects only for now.
-        </p>
-      )}
       {types.filter((t) => open.has(t.name)).map((type) => (
-        <TypePanel key={type.name} type={type} saved={saved} onApply={onApply} />
+        <TypePanel key={type.name} type={type} onApply={onApply} use={consumption.find((c) => c.typeName === type.name)} />
       ))}
     </section>
   );
@@ -92,10 +86,17 @@ function TypeForm({ existing, onSave, onCancel }: { existing: ResourceType[]; on
   );
 }
 
-function TypePanel({ type, saved, onApply }: { type: ResourceType; saved: boolean; onApply: (commands: Command[]) => void }) {
+function TypePanel({ type, onApply, use }: { type: ResourceType; onApply: (commands: Command[]) => void; use?: TypeConsumption }) {
   const [adding, setAdding] = useState(false);
   return (
     <div className="resource-panel" role="group" aria-label={`${type.name} resources`}>
+      <p className="resource-use" data-testid="type-consumption">
+        {!use || use.items === 0
+          ? "No work items need this yet."
+          : `Work items use ${formatDuration(use.totalMs)} of ${type.name.toLowerCase()} time across ${use.items} item${use.items === 1 ? "" : "s"}${
+              use.unestimated ? ` (${use.unestimated} with no work time yet)` : ""
+            }.`}
+      </p>
       {type.resources.length === 0 && <p className="resource-empty">No {type.name.toLowerCase()} resources yet.</p>}
       <ul className="resource-list">
         {type.resources.map((resource) => (
@@ -104,7 +105,7 @@ function TypePanel({ type, saved, onApply }: { type: ResourceType; saved: boolea
             <span className="resource-available" data-testid="resource-available">
               {resource.available || "no time set"}
             </span>
-            {saved && (
+            {(
               <span className="resource-actions">
                 <button
                   className="ghost small icon"
@@ -127,7 +128,7 @@ function TypePanel({ type, saved, onApply }: { type: ResourceType; saved: boolea
           </li>
         ))}
       </ul>
-      {saved && (
+      {(
         <div className="resource-add">
           {adding ? (
             <InstanceForm

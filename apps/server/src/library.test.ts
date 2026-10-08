@@ -43,13 +43,6 @@ describe("library of known projects", () => {
     assert.equal(list[0]!.name, "Alpha renamed");
   });
 
-  it("tells apart the same path in different kinds of store", async () => {
-    const lib = createLibrary(await file());
-    await lib.record({ kind: "csv", path: "/x" }, "One");
-    await lib.record({ kind: "obsidian", path: "/x" }, "Two");
-    assert.equal((await lib.list()).length, 2);
-  });
-
   it("is human readable JSON", async () => {
     const f = await file();
     await createLibrary(f).record(csv("/plans/a"), "Alpha");

@@ -396,3 +396,5 @@ button.icon { min-width: 28px; padding: 2px 6px; font-size: 16px; line-height: 1
 .requirement-name { font-weight: 600; }
 .requirement-count { color: var(--ink-quiet); min-width: 32px; }
 .node-resources select { width: auto; }
+.requirement-use { color: var(--ink-quiet); font-size: 12.5px; }
+.resource-use { margin: 0 0 6px; color: var(--ink-quiet); font-size: 13px; }

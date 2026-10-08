@@ -1,8 +1,0 @@
-{
-  "name": "@dep-tracker/xlsx",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "description": "Minimal, dependency-free .xlsx reader and writer (zip + SpreadsheetML)",
-  "exports": { ".": "./src/index.ts" }
-}

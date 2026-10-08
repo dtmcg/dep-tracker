@@ -2,6 +2,8 @@
 
 As of 2026-10-05 · Living copy: [PRD — Project Dependency Manager](https://claude.ai/code/artifact/73bc9b9a-f914-42d7-a656-657528ffff5d)
 
+> **Scope note (2026-10-08):** the Excel, Google Sheets and Obsidian stores described below were built and then removed to focus on CSV. Storage stays behind the adapter interface so they can return; see the README's Storage section.
+
 ## Overview
 
 Project Dependency Manager is a locally run web app that models a project as a dependency graph rooted in its success criteria, and shows when each item can realistically finish. It is laid out as a graph-based Gantt chart: every node sits on a time axis, and every edge is a real dependency. Data lives in tools people already use (CSV, Excel, Google Sheets, Obsidian), in a form they can read and edit by hand.

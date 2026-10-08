@@ -6,9 +6,6 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { csvAdapter } from "@dep-tracker/adapter-csv";
-import { excelAdapter } from "@dep-tracker/adapter-excel";
-import { createGoogleAuth, createGoogleSheetsAdapter, createSheetsClient, fileTokenStore } from "@dep-tracker/adapter-gsheets";
-import { type FakeGoogle, startFakeGoogle } from "@dep-tracker/adapter-gsheets/fake";
 import { createApp } from "./app.ts";
 import { createLibrary } from "./library.ts";
 
@@ -19,24 +16,14 @@ const TOKEN = "test-token";
 let base = "";
 let close: () => Promise<void>;
 let staticDir = "";
-let fake: FakeGoogle;
 let library: ReturnType<typeof createLibrary>;
 
 before(async () => {
-  fake = await startFakeGoogle({ clientId: "cid", clientSecret: "secret" });
-  const google = createGoogleAuth({
-    clientId: "cid",
-    clientSecret: "secret",
-    accountsUrl: fake.url,
-    oauthUrl: fake.url,
-    store: fileTokenStore(path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-cfg-")), "google.json")),
-  });
-  const gsheets = createGoogleSheetsAdapter(createSheetsClient({ baseUrl: fake.url, accessToken: () => google.accessToken() }));
   library = createLibrary(path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-library-")), "projects.json"));
   staticDir = await mkdtemp(path.join(tmpdir(), "dep-tracker-web-"));
   await writeFile(path.join(staticDir, "index.html"), "<!doctype html><head><title>dep-tracker</title></head><body></body>");
   await writeFile(path.join(staticDir, "app.js"), "console.log('hi')");
-  const server = createApp({ adapters: { csv: csvAdapter, excel: excelAdapter, gsheets }, staticDir, token: TOKEN, google, projectsDir: "/home/me/Documents/pdm_projects", library });
+  const server = createApp({ adapters: { csv: csvAdapter }, staticDir, token: TOKEN, projectsDir: "/home/me/Documents/pdm_projects", library });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   close = () => new Promise((resolve) => server.close(() => resolve()));
@@ -44,7 +31,6 @@ before(async () => {
 
 after(async () => {
   await close();
-  await fake.close();
 });
 
 const headers = { "content-type": "application/json", "x-dep-tracker-token": TOKEN };
@@ -271,13 +257,13 @@ describe("GET /api/projects/:id and /version", () => {
 
 describe("POST /api/projects/import (FR-25)", () => {
   it("copies a project from one store into another and opens the copy", async () => {
-    const target = path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-api-")), "plan.xlsx");
-    const res = await post("/api/projects/import", { source: { kind: "csv", path: sample }, target: { kind: "excel", path: target } });
+    const target = await newFolder();
+    const res = await post("/api/projects/import", { source: { kind: "csv", path: sample }, target: { kind: "csv", path: target } });
     assert.equal(res.status, 201);
     const body = await res.json();
-    assert.equal(body.storage.kind, "excel");
+    assert.equal(body.storage.path, target);
     assert.equal(body.project.name, "Mobile relaunch");
-    const reread = await excelAdapter.load({ kind: "excel", path: target });
+    const reread = await csvAdapter.load({ kind: "csv", path: target });
     assert.equal(reread.project.nodes[0]?.title, "Public beta live");
   });
 
@@ -289,52 +275,11 @@ describe("POST /api/projects/import (FR-25)", () => {
 
 describe("POST /api/projects/:id/export (FR-27)", () => {
   it("writes a CSV copy of an open project", async () => {
-    const xlsx = path.join(await mkdtemp(path.join(tmpdir(), "dep-tracker-api-")), "plan.xlsx");
-    const { body: opened } = await (async () => {
-      const res = await post("/api/projects", {
-        storage: { kind: "excel", path: xlsx },
-        name: "From Excel",
-        start: "2026-11-02T09:00:00.000Z",
-        root: { title: "Done", workTime: "1d" },
-      });
-      return { body: await res.json() };
-    })();
+    const { body: opened } = await createProject(await newFolder());
     const folder = await newFolder();
     const res = await post(`/api/projects/${opened.project.id}/export`, { storage: { kind: "csv", path: folder } });
     assert.equal(res.status, 201);
-    assert.match(await readFile(path.join(folder, "nodes.csv"), "utf8"), /Done,1d/);
-  });
-});
-
-describe("Google sign-in and Sheets (S9)", () => {
-  it("signs in through the loopback redirect, then opens a Google Sheet", async () => {
-    assert.deepEqual(await (await get("/api/auth/google/status")).json(), { configured: true, connected: false });
-    const { url } = await (await post("/api/auth/google/start", {})).json();
-    const consent = await fetch(url, { redirect: "manual" });
-    const callback = new URL(consent.headers.get("location")!);
-    assert.equal(callback.pathname, "/api/auth/google/callback");
-    assert.equal(callback.host, new URL(base).host);
-    // The browser lands on our callback without the API token; the state protects it.
-    const page = await fetch(callback);
-    assert.equal(page.status, 200);
-    assert.match(await page.text(), /Signed in to Google/);
-    assert.deepEqual(await (await get("/api/auth/google/status")).json(), { configured: true, connected: true });
-
-    const id = fake.createSpreadsheet("Plan");
-    const created = await post("/api/projects", {
-      storage: { kind: "gsheets", path: `https://docs.google.com/spreadsheets/d/${id}/edit` },
-      name: "Sheet plan",
-      start: "2026-11-02T09:00:00.000Z",
-      root: { title: "Done", workTime: "1d" },
-    });
-    assert.equal(created.status, 201);
-    assert.ok(fake.spreadsheet(id)!.sheets.some((s) => s.title === "Tasks"));
-  });
-
-  it("refuses a callback with a state it never issued", async () => {
-    const res = await fetch(`${base}/api/auth/google/callback?code=x&state=forged`);
-    assert.equal(res.status, 400);
-    assert.match(await res.text(), /state/i);
+    assert.match(await readFile(path.join(folder, "nodes.csv"), "utf8"), /Public beta live,2d/);
   });
 });
 

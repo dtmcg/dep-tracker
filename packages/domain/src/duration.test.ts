@@ -38,3 +38,15 @@ describe("parseDuration", () => {
     assert.throws(() => parseDuration("2x"), /"2x"/);
   });
 });
+
+describe("formatDuration", () => {
+  it("writes milliseconds in the largest units, and round-trips with parseDuration", async () => {
+    const { formatDuration, parseDuration } = await import("./duration.ts");
+    assert.equal(formatDuration(0), "0m");
+    assert.equal(formatDuration(parseDuration("3d")), "3d");
+    assert.equal(formatDuration(parseDuration("10d")), "1w 3d");
+    assert.equal(formatDuration(parseDuration("36h")), "1d 12h");
+    assert.equal(formatDuration(parseDuration("1w 2d 4h 30m")), "1w 2d 4h 30m");
+    assert.equal(formatDuration(90_000), "1m");
+  });
+});
