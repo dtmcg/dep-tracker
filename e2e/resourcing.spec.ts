@@ -37,6 +37,7 @@ test("resource pool: define a type, add instances, copy and remove them, and kee
   await page.getByRole("form", { name: "New Developer" }).getByRole("button", { name: "Save" }).click();
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(1)).toContainText("Unnamed developer");
+  await expect(rows.nth(1).getByTestId("resource-available")).toHaveText("always available");
 
   // A bad available time is refused, and nothing is added
   await panel.getByRole("button", { name: "Add Developer" }).click();

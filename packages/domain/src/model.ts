@@ -38,7 +38,7 @@ export interface Dependency {
 export interface Resource {
   id: string;
   name: string;
-  /** How much working time it has, in the work time format ("40h", "3d"); empty when not given. */
+  /** How much working time it has, in the work time format ("40h", "3d"). Empty means continuously available. */
   available: string;
 }
 

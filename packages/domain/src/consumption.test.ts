@@ -64,3 +64,20 @@ describe("resource consumption", () => {
     assert.equal(d(2, ""), "no work time yet");
   });
 });
+
+describe("resource availability", () => {
+  it("is continuously available (no limit) when no available time is given", async () => {
+    const { availableMs, describeAvailability } = await import("./consumption.ts");
+    const blank = { id: "r", name: "Ann", available: "" };
+    assert.equal(availableMs(blank), null);
+    assert.equal(availableMs({ ...blank, available: "  " }), null);
+    assert.equal(describeAvailability(blank), "always available");
+  });
+
+  it("is the given time otherwise", async () => {
+    const { availableMs, describeAvailability } = await import("./consumption.ts");
+    const forty = { id: "r", name: "Ann", available: "40h" };
+    assert.equal(availableMs(forty), 40 * 3_600_000);
+    assert.equal(describeAvailability(forty), "40h");
+  });
+});

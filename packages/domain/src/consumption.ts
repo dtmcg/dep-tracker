@@ -1,5 +1,5 @@
 import { formatDuration, parseDuration } from "./duration.ts";
-import type { Project, ProjectNode } from "./model.ts";
+import type { Project, ProjectNode, Resource } from "./model.ts";
 
 /**
  * Resource consumption. Allocating several resources to a work item does not change its duration, and each
@@ -59,4 +59,14 @@ export function projectConsumption(project: Project): TypeConsumption[] {
 export function describeConsumption(c: RequirementConsumption): string {
   if (c.eachMs === null) return "no work time yet";
   return c.count === 1 ? `${formatDuration(c.eachMs)}` : `${formatDuration(c.eachMs)} each, ${formatDuration(c.totalMs!)} in all`;
+}
+
+/** How much working time a resource has, in ms. Null means continuously available (no available time given), i.e. no limit. */
+export function availableMs(resource: Resource): number | null {
+  return resource.available.trim() ? parseDuration(resource.available) : null;
+}
+
+/** "40h", or "always available" for a resource with no available time. */
+export function describeAvailability(resource: Resource): string {
+  return resource.available.trim() || "always available";
 }

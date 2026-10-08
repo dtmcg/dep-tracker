@@ -131,7 +131,7 @@ npm start -- --resourcing
 With it on, each project shows a **Resources** strip under the label key: a resource pool, like labels but with instances.
 
 - **Add resource type** defines a type such as "Developer" (names are unique, ignoring case).
-- Click a type to expand it. Its instances are listed with their name and available time, and a **+** adds a new one: a name and an available time (a duration like `40h` or `3d`). Neither is required; an instance can be saved empty.
+- Click a type to expand it. Its instances are listed with their name and available time, and a **+** adds a new one: a name and an available time (a duration like `40h` or `3d`). Neither is required; an instance can be saved empty. A resource with no available time is treated as continuously available, and is listed as "always available".
 - Beside every instance, **+** adds another with the same details (right after it) and **−** removes it. Edits can be undone like any other.
 - **Remove type** deletes a type and its instances.
 

@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { formatDuration, projectConsumption, type Command, type Project, type ResourceType, type TypeConsumption } from "@dep-tracker/domain";
+import { describeAvailability, formatDuration, projectConsumption, type Command, type Project, type ResourceType, type TypeConsumption } from "@dep-tracker/domain";
 import { addInstance, cloneInstance, removeInstance, resourceLabel } from "./resources.ts";
 
 interface ResourcePoolProps {
@@ -103,7 +103,7 @@ function TypePanel({ type, onApply, use }: { type: ResourceType; onApply: (comma
           <li key={resource.id} data-testid="resource-instance">
             <span className="resource-name">{resourceLabel(type, resource)}</span>
             <span className="resource-available" data-testid="resource-available">
-              {resource.available || "no time set"}
+              {describeAvailability(resource)}
             </span>
             {(
               <span className="resource-actions">
@@ -182,7 +182,7 @@ function InstanceForm({ type, onSave, onCancel }: { type: ResourceType; onSave: 
       </label>
       <label>
         Available time
-        <input value={available} onChange={(e) => setAvailable(e.target.value)} placeholder="e.g. 40h or 3d" />
+        <input value={available} onChange={(e) => setAvailable(e.target.value)} placeholder="blank = always available" />
       </label>
       <button type="submit" className="small">
         Save
