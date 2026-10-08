@@ -241,6 +241,11 @@ describe("node view layout", () => {
     assert.ok(l.rowHeight > l.barHeight);
   });
 
+  it("makes every box a square", () => {
+    const l = nodeLayout(proj());
+    assert.equal(l.bars[0]!.width, l.barHeight);
+  });
+
   it("ends each node's box at the position on the time axis where it is estimated to complete", () => {
     const p = proj();
     const s = schedule(p);

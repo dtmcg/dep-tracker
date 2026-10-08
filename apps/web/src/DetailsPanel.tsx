@@ -1,6 +1,6 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { newId, parseReference, type ProjectNode, STORAGE_KINDS, type StorageDescriptor } from "@dep-tracker/domain";
-import { formatDateTime } from "./format.ts";
+import { useDateFormatter } from "./dateDisplay.tsx";
 import { renderMarkdown } from "./markdown.ts";
 import { formChanges, type NodeForm, toForm } from "./nodeForm.ts";
 import { applyLocally, dependencyCommands, referenceCommands } from "./projectState.ts";
@@ -21,6 +21,7 @@ export function DetailsPanel({
   /** Opens the project a reference node points at. */
   onOpenReference?: (storage: StorageDescriptor) => Promise<void>;
 }) {
+  const formatDate = useDateFormatter();
   const { snapshot } = session;
   const { project } = snapshot;
   const times = snapshot.schedule.nodes[node.id];
@@ -64,17 +65,17 @@ export function DetailsPanel({
                 </div>
                 <div>
                   <dt>Not before</dt>
-                  <dd data-testid="detail-not-before">{node.notBefore ? formatDateTime(node.notBefore) : "None"}</dd>
+                  <dd data-testid="detail-not-before">{node.notBefore ? formatDate(node.notBefore) : "None"}</dd>
                 </div>
                 <div>
                   <dt>Dependency time</dt>
-                  <dd data-testid="detail-dependency-time">{times?.dependencyTime ? formatDateTime(times.dependencyTime) : "None"}</dd>
+                  <dd data-testid="detail-dependency-time">{times?.dependencyTime ? formatDate(times.dependencyTime) : "None"}</dd>
                 </div>
               </>
             )}
             <div>
               <dt>Completion</dt>
-              <dd data-testid="detail-completion">{times ? formatDateTime(times.completion) : "Not scheduled"}</dd>
+              <dd data-testid="detail-completion">{times ? formatDate(times.completion) : "Not scheduled"}</dd>
             </div>
           </dl>
           {snapshot.schedule.flags[node.id]?.includes("unestimated") && (
@@ -284,6 +285,7 @@ function ConnectExisting({ node, session, exclude }: { node: ProjectNode; sessio
 }
 
 function NodeEditor({ node, session, onDone }: { node: ProjectNode; session: Session; onDone: () => void }) {
+  const formatDate = useDateFormatter();
   const [form, setForm] = useState<NodeForm>(() => toForm(node));
   const { changes, errors } = formChanges(node, form);
   const valid = Object.keys(errors).length === 0;
@@ -353,7 +355,7 @@ function NodeEditor({ node, session, onDone }: { node: ProjectNode; session: Ses
       </div>
       <div className="actions wide">
         <span className="preview">
-          Completes <b data-testid="preview-completion">{preview ? formatDateTime(preview.completion) : "—"}</b>
+          Completes <b data-testid="preview-completion">{preview ? formatDate(preview.completion) : "—"}</b>
         </span>
         <span className="spacer" />
         <button type="button" className="ghost" onClick={onDone}>

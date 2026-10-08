@@ -47,3 +47,22 @@ export function saveTimeScale(storage: ViewStorage, on: boolean): void {
     // The choice just won't outlast this tab.
   }
 }
+
+const TIMES_KEY = "dep-tracker.showtimes";
+
+/** Whether dates show their hours and minutes. Off until switched on. */
+export function loadShowTimes(storage: ViewStorage): boolean {
+  try {
+    return storage.getItem(TIMES_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+export function saveShowTimes(storage: ViewStorage, on: boolean): void {
+  try {
+    storage.setItem(TIMES_KEY, on ? "on" : "off");
+  } catch {
+    // The choice just won't outlast this tab.
+  }
+}

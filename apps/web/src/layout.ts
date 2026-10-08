@@ -6,10 +6,10 @@ import type { ViewMode } from "./viewMode.ts";
 export const DAY_MS = 86_400_000;
 export const ROW_HEIGHT = 40;
 export const BAR_HEIGHT = 26;
-/** Node view: every node is a box of this size, wherever it sits and however long its work takes. */
-export const NODE_WIDTH = 176;
-export const NODE_HEIGHT = 46;
-export const NODE_ROW_HEIGHT = 60;
+/** Node view: every node is a square box of this size, wherever it sits and however long its work takes. */
+export const NODE_WIDTH = 156;
+export const NODE_HEIGHT = 156;
+export const NODE_ROW_HEIGHT = 172;
 const NODE_GAP = 8;
 /** Node view without a time scale: boxes sit in columns by dependency depth, this far apart (room for connectors). */
 export const COLUMN_GAP = 64;

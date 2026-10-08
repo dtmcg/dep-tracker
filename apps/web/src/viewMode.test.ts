@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_VIEW, loadTimeScale, loadView, saveTimeScale, saveView, VIEWS } from "./viewMode.ts";
+import { DEFAULT_VIEW, loadShowTimes, loadTimeScale, loadView, saveShowTimes, saveTimeScale, saveView, VIEWS } from "./viewMode.ts";
 
 const memory = (initial: Record<string, string> = {}) => {
   const data = { ...initial };
@@ -59,5 +59,25 @@ describe("time scale", () => {
     const broken = { getItem: () => { throw new Error("no"); }, setItem: () => { throw new Error("no"); } };
     assert.equal(loadTimeScale(broken), true);
     assert.doesNotThrow(() => saveTimeScale(broken, false));
+  });
+});
+
+describe("show times", () => {
+  it("is off until switched on", () => {
+    assert.equal(loadShowTimes(memory()), false);
+  });
+
+  it("remembers the choice", () => {
+    const store = memory();
+    saveShowTimes(store, true);
+    assert.equal(loadShowTimes(store), true);
+    saveShowTimes(store, false);
+    assert.equal(loadShowTimes(store), false);
+  });
+
+  it("copes with storage that throws", () => {
+    const broken = { getItem: () => { throw new Error("no"); }, setItem: () => { throw new Error("no"); } };
+    assert.equal(loadShowTimes(broken), false);
+    assert.doesNotThrow(() => saveShowTimes(broken, true));
   });
 });

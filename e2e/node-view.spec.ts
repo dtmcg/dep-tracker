@@ -33,7 +33,7 @@ test("node view: uniform boxes at their completion, same interactions, remembere
   // Title and completion date inside the box
   await expect(bar(page, "Short").getByTestId("bar")).toContainText("Short");
   await expect(bar(page, "Short").getByTestId("completion")).toHaveAttribute("datetime", "2026-11-03T09:00:00.000Z");
-  await expect(bar(page, "Short").getByTestId("bar")).toContainText("Tue 3 Nov 2026");
+  await expect(bar(page, "Short").getByTestId("bar")).toContainText("3 Nov 2026");
 
   // Boxes end at their completion: Long (5d) ends later than Short (1d), by 4 days of axis
   const shortEnd = s.x + s.width;

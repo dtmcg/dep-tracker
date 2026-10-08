@@ -1,12 +1,37 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { DetailsPanel } from "./DetailsPanel.tsx";
-import { formatDateTime } from "./format.ts";
+import { ShowTimesContext, useDateFormatter } from "./dateDisplay.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { LabelKey } from "./LabelKey.tsx";
 import type { StorageDescriptor } from "@dep-tracker/domain";
 import type { Session } from "./useProjectSession.ts";
+import { loadShowTimes, saveShowTimes } from "./viewMode.ts";
 
-export function ProjectView({ session, onOpenReference }: { session: Session; onOpenReference?: (storage: StorageDescriptor) => Promise<void> }) {
+export function ProjectView(props: { session: Session; onOpenReference?: (storage: StorageDescriptor) => Promise<void> }) {
+  const [showTimes, setShowTimesState] = useState(() => loadShowTimes(window.localStorage));
+  const setShowTimes = (next: boolean) => {
+    setShowTimesState(next);
+    saveShowTimes(window.localStorage, next);
+  };
+  return (
+    <ShowTimesContext.Provider value={showTimes}>
+      <ProjectScreen {...props} showTimes={showTimes} onShowTimes={setShowTimes} />
+    </ShowTimesContext.Provider>
+  );
+}
+
+function ProjectScreen({
+  session,
+  onOpenReference,
+  showTimes,
+  onShowTimes,
+}: {
+  session: Session;
+  onOpenReference?: (storage: StorageDescriptor) => Promise<void>;
+  showTimes: boolean;
+  onShowTimes: (on: boolean) => void;
+}) {
+  const formatDate = useDateFormatter();
   const { snapshot, saveState, notice } = session;
   const { project } = snapshot;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -36,7 +61,7 @@ export function ProjectView({ session, onOpenReference }: { session: Session; on
         <div>
           <h1 id="project-name">{project.name}</h1>
           <span className="meta">
-            {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDateTime(project.start)} ·{" "}
+            {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDate(project.start)} ·{" "}
             <span className="mono" title={snapshot.storage.path}>
               {{ csv: "CSV", excel: "Excel", obsidian: "Obsidian", gsheets: "Google Sheet" }[snapshot.storage.kind]}: {snapshot.storage.path}
             </span>
@@ -110,6 +135,8 @@ export function ProjectView({ session, onOpenReference }: { session: Session; on
           schedule={snapshot.schedule}
           selectedId={selectedId}
           activeLabels={activeLabels}
+          showTimes={showTimes}
+          onShowTimes={onShowTimes}
           onSelect={setSelectedId}
           onConnect={(dependencyId, dependentId) => session.apply([{ type: "addEdge", dependentId, dependencyId }])}
         />

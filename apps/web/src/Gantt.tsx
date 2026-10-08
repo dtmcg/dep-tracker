@@ -1,7 +1,7 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { criticalEdges, dependenciesOf, dependentsOf, parseDuration, type Project, type Schedule } from "@dep-tracker/domain";
 import { dashSeconds } from "./animation.ts";
-import { formatDateTime } from "./format.ts";
+import { useDateFormatter } from "./dateDisplay.tsx";
 import { activeLabels as labelsOn, labelColour } from "./labels.ts";
 import { DAY_MS, fitPxPerDay, layoutGantt, NODE_WIDTH, timeTicks, ZOOM_LEVELS } from "./layout.ts";
 import { loadTimeScale, loadView, saveTimeScale, saveView, VIEWS, type ViewMode } from "./viewMode.ts";
@@ -18,6 +18,9 @@ interface GanttProps {
   selectedId: string | null;
   /** Labels switched on in the label key. */
   activeLabels: Set<string>;
+  /** Whether dates show their hours and minutes (off by default). */
+  showTimes: boolean;
+  onShowTimes: (on: boolean) => void;
   onSelect: (id: string | null) => void;
   onConnect: (dependencyId: string, dependentId: string) => void;
 }
@@ -30,7 +33,8 @@ function nearestZoom(pxPerDay: number): ZoomName {
   ).name;
 }
 
-export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, onConnect }: GanttProps) {
+export function Gantt({ project, schedule, selectedId, activeLabels, showTimes, onShowTimes, onSelect, onConnect }: GanttProps) {
+  const formatDate = useDateFormatter();
   const scroller = useRef<HTMLDivElement>(null);
   const [pxPerDay, setPxPerDay] = useState<number>(ZOOM_LEVELS[1].pxPerDay);
   const [view, setViewState] = useState<ViewMode>(() => loadView(window.localStorage));
@@ -222,6 +226,10 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
             </button>
           ))}
         </div>
+        <label className="scale-toggle">
+          <input type="checkbox" checked={showTimes} onChange={(e) => onShowTimes(e.target.checked)} />
+          Exact times
+        </label>
         {nodesView && (
           <label className="scale-toggle">
             <input type="checkbox" checked={timeScale} onChange={(e) => setTimeScale(e.target.checked)} />
@@ -276,7 +284,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
               <span>Can't be scheduled</span>
             </div>
           )}
-          {showToday && <div className="today-marker" data-testid="today-marker" style={{ left: todayX }} title={`Now: ${formatDateTime(new Date(now).toISOString())}`} />}
+          {showToday && <div className="today-marker" data-testid="today-marker" style={{ left: todayX }} title={`Now: ${formatDate(new Date(now).toISOString())}`} />}
 
           <svg className="edges" width={width} height={layout.height} aria-hidden="true">
             <defs>
@@ -348,25 +356,44 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                     {nodesView ? (
                       <>
                         <span className="node-title">{node.title}</span>
-                        <span className="node-sub">
-                          {times ? (
-                            <time data-testid="completion" dateTime={times.completion}>
-                              {formatDateTime(times.completion)}
-                            </time>
-                          ) : (
-                            <span className="bar-note">{noteFor(b.id)}</span>
+                        <dl className="node-facts">
+                          {times && (
+                            <div>
+                              <dt>Start</dt>
+                              <dd data-testid="node-start">{formatDate(times.start, { weekday: false })}</dd>
+                            </div>
                           )}
-                          {on.map((label) => (
-                            <span
-                              key={label}
-                              className="label-chip"
-                              data-testid="active-label"
-                              style={{ "--label-colour": labelColour(project, label) } as CSSProperties}
-                            >
-                              {label}
-                            </span>
-                          ))}
-                        </span>
+                          <div>
+                            <dt>Work</dt>
+                            <dd data-testid="node-work">{node.ref ? "other project" : node.workTime.trim() || "not set"}</dd>
+                          </div>
+                          <div>
+                            <dt>Done</dt>
+                            <dd>
+                              {times ? (
+                                <time data-testid="completion" dateTime={times.completion}>
+                                  {formatDate(times.completion, { weekday: false })}
+                                </time>
+                              ) : (
+                                <span className="bar-note">{noteFor(b.id)}</span>
+                              )}
+                            </dd>
+                          </div>
+                        </dl>
+                        {on.length > 0 && (
+                          <span className="node-sub">
+                            {on.map((label) => (
+                              <span
+                                key={label}
+                                className="label-chip"
+                                data-testid="active-label"
+                                style={{ "--label-colour": labelColour(project, label) } as CSSProperties}
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </>
                     ) : (
                       /* When the next bar on the row leaves no room for the label, the title goes inside the bar. */
@@ -392,7 +419,7 @@ export function Gantt({ project, schedule, selectedId, activeLabels, onSelect, o
                     <span className="bar-title">{node.title}</span>
                     {times ? (
                       <time data-testid="completion" dateTime={times.completion}>
-                        {formatDateTime(times.completion)}
+                        {formatDate(times.completion)}
                       </time>
                     ) : (
                       <span className="bar-note">{noteFor(b.id)}</span>

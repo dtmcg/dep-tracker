@@ -22,7 +22,7 @@ test("S0: open a CSV project and see its root node with its completion time", as
   await expect(root).toHaveAttribute("data-root", "true");
   // Start 2026-11-02 09:00 UTC + 2d work time
   await expect(root.getByTestId("completion")).toHaveAttribute("datetime", "2026-11-04T09:00:00.000Z");
-  await expect(root.getByTestId("completion")).toHaveText("Wed 4 Nov 2026, 09:00");
+  await expect(root.getByTestId("completion")).toHaveText("Wed 4 Nov 2026");
 });
 
 test("S0: opening a folder that is not a project shows a clear error", async ({ page }) => {

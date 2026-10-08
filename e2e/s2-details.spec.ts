@@ -14,16 +14,16 @@ test("S2: node details, the worked example, live edits and undo/redo", async ({ 
   const details = await openDetails(page, "Release");
   await expect(details.getByTestId("detail-work")).toHaveText("2d");
   await expect(details.getByTestId("detail-not-before")).toHaveText("None");
-  await expect(details.getByTestId("detail-dependency-time")).toHaveText("Wed 4 Nov 2026, 09:00");
-  await expect(details.getByTestId("detail-completion")).toHaveText("Fri 6 Nov 2026, 09:00");
+  await expect(details.getByTestId("detail-dependency-time")).toHaveText("Wed 4 Nov 2026");
+  await expect(details.getByTestId("detail-completion")).toHaveText("Fri 6 Nov 2026");
 
   // Worked example: not before 1 Nov, dependencies 30 Oct and 4 Nov, 2d → 6 Nov
   await details.getByRole("button", { name: "Edit" }).click();
   await details.getByLabel("Not before").fill("2026-11-01T09:00");
-  await expect(details.getByTestId("preview-completion")).toHaveText("Fri 6 Nov 2026, 09:00");
+  await expect(details.getByTestId("preview-completion")).toHaveText("Fri 6 Nov 2026");
   // A later not-before date wins over the dependency time, recomputed as you type
   await details.getByLabel("Not before").fill("2026-11-05T09:00");
-  await expect(details.getByTestId("preview-completion")).toHaveText("Sat 7 Nov 2026, 09:00");
+  await expect(details.getByTestId("preview-completion")).toHaveText("Sat 7 Nov 2026");
   await details.getByLabel("Description").fill("**Ship** the release to everyone.");
   await details.getByLabel("Links").fill("https://example.com/release");
   await details.getByLabel("Work time").fill("2x");
@@ -32,7 +32,7 @@ test("S2: node details, the worked example, live edits and undo/redo", async ({ 
   await details.getByLabel("Work time").fill("2d");
   await details.getByRole("button", { name: "Save" }).click();
 
-  await expect(details.getByTestId("detail-completion")).toHaveText("Sat 7 Nov 2026, 09:00");
+  await expect(details.getByTestId("detail-completion")).toHaveText("Sat 7 Nov 2026");
   await expect(details.locator("strong", { hasText: "Ship" })).toBeVisible();
   await expect(details.getByRole("link", { name: "https://example.com/release" })).toHaveAttribute(
     "href",
@@ -43,10 +43,10 @@ test("S2: node details, the worked example, live edits and undo/redo", async ({ 
 
   // Undo restores the previous values and dates; redo reapplies them
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(details.getByTestId("detail-completion")).toHaveText("Fri 6 Nov 2026, 09:00");
+  await expect(details.getByTestId("detail-completion")).toHaveText("Fri 6 Nov 2026");
   await expect(details.locator("strong", { hasText: "Ship" })).toHaveCount(0);
   await page.getByRole("button", { name: "Redo" }).click();
-  await expect(details.getByTestId("detail-completion")).toHaveText("Sat 7 Nov 2026, 09:00");
+  await expect(details.getByTestId("detail-completion")).toHaveText("Sat 7 Nov 2026");
   await expect(page.getByRole("status", { name: "Save status" })).toHaveText("Saved");
 });
 
