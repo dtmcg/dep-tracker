@@ -142,3 +142,9 @@ The pool is saved in the project's CSV folder as `resource_types.csv` (`type`) a
 With `--resourcing` on, a selected work item's details panel has a **Resources needed** section. **Add resource requirement** lets you choose one of the pool's types, or **New type…** to create one on the spot (it joins the pool too). A requirement starts at 1; the **+** and **−** beside it change the number needed (a Developer × 2), and **−** at 1 removes it. Each requirement can also have a **minimum** and a **maximum** (the **Limits** link; blank means none, otherwise a whole number of at least 1, and the maximum can't be below the minimum): a Developer × 2 with min 1, max 3. The number allocated always stays within them, so **+** stops at the maximum and **−** at the minimum, and setting limits moves the number into range. A type can appear once per work item, and references to other projects can't have requirements.
 
 It is saved in a `resources` column of `nodes.csv`, e.g. `Developer x 2 (min 1, max 3); Tester` (a type with no number needs 1, or its minimum if it has one). The column only appears once some work item needs a resource. Removing a type from the pool also clears it from the work items that needed it (undo restores both).
+
+## Online demo (GitHub Pages)
+
+`npm run build:demo` (or `node scripts/build-demo.mjs`) builds a static copy of the app into `site/`: the same UI, commands, validation and scheduling, but the sample project ("Mobile relaunch", resourcing switched on) lives in memory in the browser, with no backend. Edits are lost on reload; "Reset sample" restores it. Export, import and creating projects are disabled.
+
+`.github/workflows/pages.yml` runs the tests, builds the demo and deploys it on every push to `main`. One-off setup: repository **Settings → Pages → Build and deployment → Source: GitHub Actions**. The site is then at `https://<owner>.github.io/dep-tracker/`.

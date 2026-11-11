@@ -403,3 +403,12 @@ button.icon { min-width: 28px; padding: 2px 6px; font-size: 16px; line-height: 1
 .limits-form { flex-basis: 100%; }
 .limits-form input { width: 5em; }
 button.icon:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.demo-banner {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d0d7de);
+  background: var(--surface-2, rgba(125, 125, 125, 0.12));
+  font-size: 0.9rem;
+}

@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "build": "node scripts/build-web.mjs",
+    "build:demo": "node scripts/build-demo.mjs",
     "start": "npm run build && tsx apps/server/src/main.ts",
     "dev": "node scripts/dev.mjs",
     "test": "node --import tsx --test \"packages/*/src/**/*.test.ts\" \"apps/*/src/**/*.test.ts\"",

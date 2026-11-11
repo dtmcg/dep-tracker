@@ -34,7 +34,8 @@ function ProjectScreen({
   onShowTimes: (on: boolean) => void;
 }) {
   const formatDate = useDateFormatter();
-  const { resourcing } = useFeatures();
+  const features = useFeatures();
+  const { resourcing } = features;
   const { snapshot, saveState, notice } = session;
   const { project } = snapshot;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -65,9 +66,13 @@ function ProjectScreen({
           <h1 id="project-name">{project.name}</h1>
           <span className="meta">
             {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDate(project.start)} ·{" "}
-            <span className="mono" title={snapshot.storage.path}>
-              {{ csv: "CSV" }[snapshot.storage.kind]}: {snapshot.storage.path}
-            </span>
+            {features.demo ? (
+              <span>sample project, kept in memory</span>
+            ) : (
+              <span className="mono" title={snapshot.storage.path}>
+                {{ csv: "CSV" }[snapshot.storage.kind]}: {snapshot.storage.path}
+              </span>
+            )}
           </span>
         </div>
         <div className="header-actions">
@@ -80,11 +85,13 @@ function ProjectScreen({
           <button className="ghost" onClick={session.redo} disabled={!session.canRedo} title="Redo (Ctrl+Shift+Z)">
             Redo
           </button>
-          <button className="ghost" onClick={() => setExporting((x) => !x)} aria-expanded={exporting}>
-            Export to CSV
-          </button>
+          {!features.demo && (
+            <button className="ghost" onClick={() => setExporting((x) => !x)} aria-expanded={exporting}>
+              Export to CSV
+            </button>
+          )}
           <button className="ghost" onClick={session.close}>
-            Close
+            {features.demo ? "Reset sample" : "Close"}
           </button>
         </div>
       </header>
