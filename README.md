@@ -2,6 +2,8 @@
 
 Project Dependency Manager: a locally run web app that models a project as a dependency graph rooted in its success criteria and shows when each item can realistically finish, as a graph-based Gantt chart. Projects live in CSV folders. Storage sits behind an adapter interface, so other stores can be added later (see Storage).
 
+**Try it in your browser: https://dtmcg.github.io/dep-tracker/** (an in-memory sample, no install; see Online demo).
+
 The product requirements are in [features/PRD.md](features/PRD.md). Work is delivered as thin end-to-end slices, each built test-first.
 
 ## Status
@@ -144,6 +146,8 @@ With `--resourcing` on, a selected work item's details panel has a **Resources n
 It is saved in a `resources` column of `nodes.csv`, e.g. `Developer x 2 (min 1, max 3); Tester` (a type with no number needs 1, or its minimum if it has one). The column only appears once some work item needs a resource. Removing a type from the pool also clears it from the work items that needed it (undo restores both).
 
 ## Online demo (GitHub Pages)
+
+**Live demo: https://dtmcg.github.io/dep-tracker/**
 
 `npm run build:demo` (or `node scripts/build-demo.mjs`) builds a static copy of the app into `site/`: the same UI, commands, validation and scheduling, but the sample project ("Mobile relaunch", resourcing switched on) lives in memory in the browser, with no backend. Edits are lost on reload; "Reset sample" restores it. Export, import and creating projects are disabled.
 
