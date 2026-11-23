@@ -67,7 +67,7 @@ function ProjectScreen({
           <span className="meta">
             {project.nodes.length} node{project.nodes.length === 1 ? "" : "s"} · starts {formatDate(project.start)} ·{" "}
             {features.demo ? (
-              <span>sample project, kept in memory</span>
+              <span>example, kept in memory</span>
             ) : (
               <span className="mono" title={snapshot.storage.path}>
                 {{ csv: "CSV" }[snapshot.storage.kind]}: {snapshot.storage.path}
@@ -91,7 +91,7 @@ function ProjectScreen({
             </button>
           )}
           <button className="ghost" onClick={session.close}>
-            {features.demo ? "Reset sample" : "Close"}
+            {features.demo ? "Reset example" : "Close"}
           </button>
         </div>
       </header>

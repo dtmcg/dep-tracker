@@ -149,6 +149,11 @@ It is saved in a `resources` column of `nodes.csv`, e.g. `Developer x 2 (min 1, 
 
 **Live demo: https://dtmcg.github.io/dep-tracker/**
 
-`npm run build:demo` (or `node scripts/build-demo.mjs`) builds a static copy of the app into `site/`: the same UI, commands, validation and scheduling, but the sample project ("Mobile relaunch", resourcing switched on) lives in memory in the browser, with no backend. Edits are lost on reload; "Reset sample" restores it. Export, import and creating projects are disabled.
+`npm run build:demo` (or `node scripts/build-demo.mjs`) builds a static copy of the app into `site/`: the same UI, commands, validation, reference resolution and scheduling, but the projects live in memory in the browser, with no backend. Edits are lost on reload.
+
+- **Example picker:** a drop-down at the top swaps in one of six examples: Mobile relaunch, Annual conference and Data migration (simple), Build a house, and two pharma engineering projects that use every feature (a tablet manufacturing line and a sterile fill-finish line: IQ/OQ/PQ validation, long-lead equipment, resource pools with min/max limits, not-before dates, unestimated items and references to other projects, which open in the demo too). Examples live in `apps/web/src/demo/examples.ts`.
+- **Start new:** opens a form for a project name and success criteria, then a project with exactly one node. Build it up from there.
+- **Reset example:** puts the picked example (or the blank project) back as it was.
+- Export, import and the folder-based start screen are disabled.
 
 `.github/workflows/pages.yml` runs the tests, builds the demo and deploys it on every push to `main`. One-off setup: repository **Settings → Pages → Build and deployment → Source: GitHub Actions**. The site is then at `https://<owner>.github.io/dep-tracker/`.

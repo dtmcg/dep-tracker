@@ -404,11 +404,11 @@ button.icon { min-width: 28px; padding: 2px 6px; font-size: 16px; line-height: 1
 .limits-form input { width: 5em; }
 button.icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.demo-banner {
-  margin: 0 0 1rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid var(--border, #d0d7de);
-  background: var(--surface-2, rgba(125, 125, 125, 0.12));
-  font-size: 0.9rem;
-}
+
+.demo-bar { margin: 0 0 1rem; padding: 0.7rem 0.9rem; border-radius: 8px; border: 1px solid var(--border, #d0d7de); background: var(--surface-2, rgba(125, 125, 125, 0.12)); }
+.demo-bar .demo-note { margin: 0 0 0.6rem; font-size: 0.9rem; }
+.demo-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.demo-controls .demo-blurb { opacity: 0.75; font-size: 0.88rem; flex: 1 1 18rem; }
+.demo-new { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 0.7rem; }
+.demo-new label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; flex: 1 1 14rem; }
+.demo-controls select { width: auto; max-width: 22rem; }

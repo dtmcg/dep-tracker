@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { type Api, createApi, type OpenedProject, pageToken } from "./api.ts";
+import { createApi, type OpenedProject, pageToken } from "./api.ts";
+import { DemoBar } from "./demo/DemoBar.tsx";
+import type { MemoryBackend } from "./demo/memoryApi.ts";
 import { type Features, FeaturesContext } from "./features.tsx";
 import { ProjectView } from "./ProjectView.tsx";
 import { ThemePicker } from "./ThemePicker.tsx";
 import { StartScreen } from "./StartScreen.tsx";
 import { useProjectSession } from "./useProjectSession.ts";
 
-/** The online demo passes an in-memory api; `reset` puts the sample back as it was. */
-export interface DemoBackend {
-  api: Api;
-  reset: () => OpenedProject;
-}
-
-export function App({ demo }: { demo?: DemoBackend } = {}) {
-  const api = useMemo(() => demo?.api ?? createApi(pageToken()), [demo]);
+/** The online demo passes an in-memory backend in place of the API server. */
+export function App({ demo }: { demo?: MemoryBackend } = {}) {
+  const api = useMemo(() => demo ?? createApi(pageToken()), [demo]);
   const [opened, setOpened] = useState<OpenedProject | null>(null);
   const [generation, setGeneration] = useState(0);
   const [features, setFeatures] = useState<Features>({ resourcing: false, demo: demo !== undefined });
@@ -21,14 +18,13 @@ export function App({ demo }: { demo?: DemoBackend } = {}) {
     api.config().then((c) => setFeatures({ resourcing: c.resourcing === true, demo: demo !== undefined }), () => undefined);
   }, [api, demo]);
   useEffect(() => {
-    if (demo) void api.openProject({ kind: "csv", path: "" }).then(setOpened);
+    if (demo) setOpened(demo.reset());
   }, [api, demo]);
-  const close = () => {
-    if (demo) {
-      setOpened(demo.reset());
-      setGeneration((g) => g + 1);
-    } else setOpened(null);
+  const show = (next: OpenedProject) => {
+    setOpened(next);
+    setGeneration((g) => g + 1);
   };
+  const close = () => (demo ? show(demo.reset()) : setOpened(null));
 
   return (
     <FeaturesContext.Provider value={features}>
@@ -37,12 +33,7 @@ export function App({ demo }: { demo?: DemoBackend } = {}) {
         <strong>dep-tracker</strong> Project dependency manager
         <ThemePicker />
       </div>
-      {demo && (
-        <p className="demo-banner" role="note">
-          Online demo: your edits live in this browser tab and are lost on reload. Try adding a node, labelling it, or making a
-          cycle. To keep real projects, <a href="https://github.com/dtmcg/dep-tracker">run dep-tracker locally</a>.
-        </p>
-      )}
+      {demo && <DemoBar backend={demo} onOpened={show} />}
       {opened ? (
         <OpenProject key={`${opened.project.id}-${generation}`} api={api} opened={opened} onClose={close} onOpened={setOpened} />
       ) : (

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
 import { expect, test } from "playwright/test";
-import { addDependency, bar } from "./helpers.ts";
+import { addDependency, bar, details } from "./helpers.ts";
 
 // The online demo is a static site (no backend), served by GitHub Pages under /dep-tracker/. Serve the built
 // site the same way, with no /api at all, so the test proves it runs with nothing behind it.
@@ -32,7 +32,7 @@ test.beforeAll(async () => {
 });
 test.afterAll(() => server.close());
 
-test("the demo opens the sample project with no backend, and edits stay in memory", async ({ page }) => {
+test("the demo opens the Mobile relaunch sample with no backend, and edits stay in memory", async ({ page }) => {
   const apiCalls: string[] = [];
   page.on("request", (r) => {
     if (r.url().includes("/api/")) apiCalls.push(r.url());
@@ -41,21 +41,15 @@ test("the demo opens the sample project with no backend, and edits stay in memor
 
   await expect(page.getByRole("heading", { name: "Mobile relaunch" })).toBeVisible();
   await expect(page.getByRole("note")).toContainText("Online demo");
-  await expect(bar(page, "Public beta live")).toBeVisible();
   await expect(bar(page, "QA sign-off")).toBeVisible();
-  // storage-only actions are replaced
   await expect(page.getByRole("button", { name: "Export to CSV" })).toHaveCount(0);
 
   await addDependency(page, "QA sign-off", "Test plan", "1d");
-  await expect(bar(page, "Test plan")).toBeVisible();
   await expect(page.getByRole("status", { name: "Save status" })).toHaveText("Saved");
 
-  // Reset puts the sample back
-  await page.getByRole("button", { name: "Reset sample" }).click();
-  await expect(bar(page, "QA sign-off")).toBeVisible();
+  await page.getByRole("button", { name: "Reset example" }).click();
   await expect(bar(page, "Test plan")).toHaveCount(0);
 
-  // A reload starts from the sample too
   await addDependency(page, "QA sign-off", "Another", "1d");
   await page.reload();
   await expect(bar(page, "Another")).toHaveCount(0);
@@ -63,7 +57,54 @@ test("the demo opens the sample project with no backend, and edits stay in memor
   expect(apiCalls).toEqual([]);
 });
 
-test("the demo has the resource pool switched on", async ({ page }) => {
+test("the example picker swaps in each example and drops edits to the last one", async ({ page }) => {
   await page.goto(url);
-  await expect(page.getByText("Developer").first()).toBeVisible();
+  const picker = page.getByLabel("Example project");
+  await expect(picker.locator("option")).toHaveCount(6);
+
+  await picker.selectOption({ label: "Annual conference" });
+  await expect(page.getByRole("heading", { name: "Annual conference" })).toBeVisible();
+  await expect(bar(page, "Venue booked and confirmed")).toBeVisible();
+  await expect(bar(page, "QA sign-off")).toHaveCount(0);
+
+  await picker.selectOption({ label: "Pharma: tablet manufacturing line" });
+  await expect(page.getByRole("heading", { name: "Install and qualify a tablet manufacturing line" })).toBeVisible();
+  await expect(bar(page, "Line qualified and releasing GMP batches")).toBeVisible();
+  await expect(page.getByText("Validation Engineer").first()).toBeVisible();
+
+  await picker.selectOption({ label: "Pharma: sterile fill-finish line" });
+  await expect(page.getByRole("heading", { name: "Install and qualify a fill-finish line" })).toBeVisible();
+});
+
+test("a pharma example's reference opens the other project, and Reset example brings back the picked one", async ({ page }) => {
+  await page.goto(url);
+  await page.getByLabel("Example project").selectOption({ label: "Pharma: tablet manufacturing line" });
+  const panel = await details(page, "Cleanroom HVAC upgrade");
+  await panel.getByRole("button", { name: "Open that project" }).click();
+  await expect(page.getByRole("heading", { name: "Cleanroom HVAC upgrade" })).toBeVisible();
+  await expect(bar(page, "HVAC qualified and handed over")).toBeVisible();
+
+  await page.getByRole("button", { name: "Reset example" }).click();
+  await expect(page.getByRole("heading", { name: "Install and qualify a tablet manufacturing line" })).toBeVisible();
+});
+
+test("Start new gives a project with only its success criteria node, which can be built up", async ({ page }) => {
+  await page.goto(url);
+  await page.getByRole("button", { name: "Start new" }).click();
+  const form = page.getByRole("form", { name: "Start a new project" });
+  await form.getByLabel("Project name").fill("Office move");
+  await form.getByLabel("Success criteria").fill("Everyone working from the new office");
+  await form.getByRole("button", { name: "Start" }).click();
+
+  await expect(page.getByRole("heading", { name: "Office move" })).toBeVisible();
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(bar(page, "Everyone working from the new office")).toBeVisible();
+
+  await addDependency(page, "Everyone working from the new office", "Sign lease", "3d");
+  await expect(page.getByRole("article")).toHaveCount(2);
+
+  // Reset returns the blank project, not the example that was open before
+  await page.getByRole("button", { name: "Reset example" }).click();
+  await expect(page.getByRole("heading", { name: "Office move" })).toBeVisible();
+  await expect(page.getByRole("article")).toHaveCount(1);
 });
